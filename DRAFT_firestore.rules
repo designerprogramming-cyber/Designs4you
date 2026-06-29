@@ -1,0 +1,148 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // 1. Global Safety Net
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // 2. Global Helpers
+    function isValidId(id) {
+      return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+    function incoming() {
+      return request.resource.data;
+    }
+    function existing() {
+      return resource.data;
+    }
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    // 3. Validation Helpers for Entities
+    function isValidSettings(data) {
+      return data.settings is map;
+    }
+
+    function isValidService(data) {
+      return data.title is map && data.title.ar is string && data.title.en is string &&
+             data.description is map && data.description.ar is string && data.description.en is string &&
+             data.options is list && data.order is int;
+    }
+
+    function isValidPortfolio(data) {
+      return data.url is string && data.url.size() <= 1000 &&
+             data.filename is string && data.filename.size() <= 200 &&
+             data.category is string && data.category.size() <= 100 &&
+             data.title is map && data.title.ar is string && data.title.en is string &&
+             data.order is int;
+    }
+
+    function isValidVideo(data) {
+      return data.url is string && data.url.size() <= 1000 &&
+             data.title is map && data.title.ar is string && data.title.en is string &&
+             data.duration is string && data.duration.size() <= 50 &&
+             data.thumbnail is string && data.thumbnail.size() <= 1000 &&
+             data.order is int;
+    }
+
+    function isValidReview(data) {
+      return data.name is string && data.name.size() <= 100 &&
+             data.country is string && data.country.size() <= 100 &&
+             data.rating is int && data.rating >= 1 && data.rating <= 5 &&
+             data.comment is map && data.comment.ar is string && data.comment.en is string &&
+             data.order is int;
+    }
+
+    function isValidFAQ(data) {
+      return data.question is map && data.question.ar is string && data.question.en is string &&
+             data.answer is map && data.answer.ar is string && data.answer.en is string &&
+             data.order is int;
+    }
+
+    function isValidAnnouncement(data) {
+      return data.text is map && data.text.ar is string && data.text.en is string &&
+             data.active is bool && data.order is int;
+    }
+
+    function isValidBanner(data) {
+      return data.title is map && data.title.ar is string && data.title.en is string &&
+             data.desc is map && data.desc.ar is string && data.desc.en is string &&
+             data.btnText is map && data.btnText.ar is string && data.btnText.en is string &&
+             data.btnLink is string && data.btnLink.size() <= 200 &&
+             data.mediaType is string && (data.mediaType == 'image' || data.mediaType == 'video') &&
+             data.mediaUrl is string && data.mediaUrl.size() <= 1000 &&
+             data.order is int;
+    }
+
+    function isValidPricing(data) {
+      return data.title is map && data.title.ar is string && data.title.en is string &&
+             data.price is string && data.price.size() <= 50 &&
+             data.unit is map && data.unit.ar is string && data.unit.en is string &&
+             data.icon is string && data.icon.size() <= 100 &&
+             data.order is int;
+    }
+
+    function isValidMaintenanceBooking(data) {
+      return data.name is string && data.name.size() > 0 && data.name.size() <= 200 &&
+             data.phone is string && data.phone.size() > 0 && data.phone.size() <= 50 &&
+             data.machineType is string && data.machineType.size() > 0 && data.machineType.size() <= 100 &&
+             data.machineModel is string && data.machineModel.size() > 0 && data.machineModel.size() <= 100 &&
+             data.problemDesc is string && data.problemDesc.size() > 0 && data.problemDesc.size() <= 2000 &&
+             data.contactTime is string && data.contactTime.size() > 0 && data.contactTime.size() <= 100;
+    }
+
+    // 4. Collection Access Control
+    match /config/settings {
+      allow read: if true;
+      allow write: if isSignedIn() && isValidSettings(incoming());
+    }
+
+    match /services/{serviceId} {
+      allow read: if true;
+      allow write: if isSignedIn() && isValidId(serviceId) && isValidService(incoming());
+    }
+
+    match /portfolio/{portfolioId} {
+      allow read: if true;
+      allow write: if isSignedIn() && isValidId(portfolioId) && isValidPortfolio(incoming());
+    }
+
+    match /videos/{videoId} {
+      allow read: if true;
+      allow write: if isSignedIn() && isValidId(videoId) && isValidVideo(incoming());
+    }
+
+    match /reviews/{reviewId} {
+      allow read: if true;
+      allow write: if isSignedIn() && isValidId(reviewId) && isValidReview(incoming());
+    }
+
+    match /faqs/{faqId} {
+      allow read: if true;
+      allow write: if isSignedIn() && isValidId(faqId) && isValidFAQ(incoming());
+    }
+
+    match /announcements/{announcementId} {
+      allow read: if true;
+      allow write: if isSignedIn() && isValidId(announcementId) && isValidAnnouncement(incoming());
+    }
+
+    match /banners/{bannerId} {
+      allow read: if true;
+      allow write: if isSignedIn() && isValidId(bannerId) && isValidBanner(incoming());
+    }
+
+    match /pricingList/{pricingId} {
+      allow read: if true;
+      allow write: if isSignedIn() && isValidId(pricingId) && isValidPricing(incoming());
+    }
+
+    match /maintenanceBookings/{bookingId} {
+      allow read: if isSignedIn();
+      allow delete: if isSignedIn();
+      allow create: if isValidId(bookingId) && isValidMaintenanceBooking(incoming());
+    }
+  }
+}

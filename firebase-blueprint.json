@@ -1,0 +1,182 @@
+{
+  "entities": {
+    "Settings": {
+      "title": "Settings",
+      "description": "App branding, contact info, and theme settings",
+      "type": "object",
+      "properties": {
+        "settings": {
+          "type": "object",
+          "description": "The nested settings object"
+        }
+      },
+      "required": ["settings"]
+    },
+    "Service": {
+      "title": "Service",
+      "description": "A service offering department",
+      "type": "object",
+      "properties": {
+        "icon": { "type": "string" },
+        "faIcon": { "type": "string" },
+        "title": { "type": "object" },
+        "description": { "type": "object" },
+        "options": { "type": "array" },
+        "order": { "type": "integer" }
+      },
+      "required": ["title", "description", "options", "order"]
+    },
+    "Portfolio": {
+      "title": "Portfolio",
+      "description": "An image or item in the portfolio gallery",
+      "type": "object",
+      "properties": {
+        "url": { "type": "string" },
+        "filename": { "type": "string" },
+        "category": { "type": "string" },
+        "title": { "type": "object" },
+        "order": { "type": "integer" }
+      },
+      "required": ["url", "filename", "category", "title", "order"]
+    },
+    "Video": {
+      "title": "Video",
+      "description": "A tutorial video or instructional media",
+      "type": "object",
+      "properties": {
+        "url": { "type": "string" },
+        "title": { "type": "object" },
+        "duration": { "type": "string" },
+        "thumbnail": { "type": "string" },
+        "order": { "type": "integer" }
+      },
+      "required": ["url", "title", "duration", "thumbnail", "order"]
+    },
+    "Review": {
+      "title": "Review",
+      "description": "A customer review and testimonial",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string" },
+        "country": { "type": "string" },
+        "rating": { "type": "integer" },
+        "comment": { "type": "object" },
+        "type": { "type": "object" },
+        "image": { "type": "string" },
+        "order": { "type": "integer" }
+      },
+      "required": ["name", "country", "rating", "comment", "order"]
+    },
+    "FAQ": {
+      "title": "FAQ",
+      "description": "A frequently asked question and answer pair",
+      "type": "object",
+      "properties": {
+        "question": { "type": "object" },
+        "answer": { "type": "object" },
+        "order": { "type": "integer" }
+      },
+      "required": ["question", "answer", "order"]
+    },
+    "Announcement": {
+      "title": "Announcement",
+      "description": "An announcement text shown on top banner",
+      "type": "object",
+      "properties": {
+        "text": { "type": "object" },
+        "active": { "type": "boolean" },
+        "order": { "type": "integer" }
+      },
+      "required": ["text", "active", "order"]
+    },
+    "Banner": {
+      "title": "Banner",
+      "description": "A dynamic hero slide of the application",
+      "type": "object",
+      "properties": {
+        "title": { "type": "object" },
+        "desc": { "type": "object" },
+        "btnText": { "type": "object" },
+        "btnLink": { "type": "string" },
+        "mediaType": { "type": "string" },
+        "mediaUrl": { "type": "string" },
+        "order": { "type": "integer" }
+      },
+      "required": ["title", "desc", "btnText", "btnLink", "mediaType", "mediaUrl", "order"]
+    },
+    "Pricing": {
+      "title": "Pricing",
+      "description": "An item in the pricing guide",
+      "type": "object",
+      "properties": {
+        "title": { "type": "object" },
+        "price": { "type": "string" },
+        "unit": { "type": "object" },
+        "icon": { "type": "string" },
+        "order": { "type": "integer" }
+      },
+      "required": ["title", "price", "unit", "icon", "order"]
+    },
+    "MaintenanceBooking": {
+      "title": "MaintenanceBooking",
+      "description": "A client booking request for machine maintenance",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string" },
+        "phone": { "type": "string" },
+        "whatsapp": { "type": "string" },
+        "email": { "type": "string" },
+        "machineType": { "type": "string" },
+        "machineModel": { "type": "string" },
+        "problemDesc": { "type": "string" },
+        "fileUrl": { "type": "string" },
+        "fileName": { "type": "string" },
+        "contactTime": { "type": "string" },
+        "createdAt": { "type": "string" }
+      },
+      "required": ["name", "phone", "machineType", "machineModel", "problemDesc", "contactTime"]
+    }
+  },
+  "firestore": {
+    "config/settings": {
+      "schema": "Settings",
+      "description": "App-wide system parameters and config"
+    },
+    "services/{serviceId}": {
+      "schema": "Service",
+      "description": "Dynamic service departments"
+    },
+    "portfolio/{portfolioId}": {
+      "schema": "Portfolio",
+      "description": "Dynamic portfolio images"
+    },
+    "videos/{videoId}": {
+      "schema": "Video",
+      "description": "Dynamic instructional video files"
+    },
+    "reviews/{reviewId}": {
+      "schema": "Review",
+      "description": "Customer feedback cards"
+    },
+    "faqs/{faqId}": {
+      "schema": "FAQ",
+      "description": "Frequently Asked Questions"
+    },
+    "announcements/{announcementId}": {
+      "schema": "Announcement",
+      "description": "Announcements marquee"
+    },
+    "banners/{bannerId}": {
+      "schema": "Banner",
+      "description": "Hero banner slides"
+    },
+    "pricingList/{pricingId}": {
+      "schema": "Pricing",
+      "description": "Pricing guide rate items"
+    },
+    "maintenanceBookings/{bookingId}": {
+      "schema": "MaintenanceBooking",
+      "description": "Customer requests for maintenance"
+    }
+  }
+}

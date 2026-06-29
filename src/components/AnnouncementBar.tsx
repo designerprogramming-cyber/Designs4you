@@ -1,6 +1,5 @@
-import React, { useState, useEffect, useRef } from 'react';
-import { motion, AnimatePresence } from 'motion/react';
-import { Phone, MessageCircle } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { Phone, MessageCircle, Sparkles, Megaphone, Bell, Info } from 'lucide-react';
 import { Language } from '../types';
 import { stateStore } from '../lib/stateStore';
 
@@ -8,31 +7,7 @@ interface AnnouncementBarProps {
   lang: Language;
 }
 
-const ARABIC_MESSAGES = [
-  "⭐ مرحبًا بك في Designs4you",
-  "🎨 تصميمات احترافية للتطريز و DTF",
-  "🔧 خدمات صيانة متخصصة لماكينات التطريز",
-  "🎓 كورسات احترافية لتعلم Wilcom وصيانة الماكينات",
-  "⚡ سرعة في الرد وخدمة عملاء مميزة",
-  "📱 تواصل معنا مباشرة عبر واتساب"
-];
-
-const ENGLISH_MESSAGES = [
-  "⭐ Welcome to Designs4you",
-  "🎨 Professional Embroidery & DTF Designs",
-  "🔧 Expert Embroidery Machine Maintenance",
-  "🎓 Professional Wilcom & Maintenance Courses",
-  "⚡ Fast Response & Excellent Customer Support",
-  "📱 Contact us instantly via WhatsApp"
-];
-
-const ROTATION_TIME = 4000; // 4 seconds
-
 export default function AnnouncementBar({ lang }: AnnouncementBarProps) {
-  const [index, setIndex] = useState(0);
-  const [isHovered, setIsHovered] = useState(false);
-  const [progress, setProgress] = useState(0);
-
   // Dynamic configuration state
   const [config, setConfig] = useState(() => stateStore.getConfig());
 
@@ -46,89 +21,62 @@ export default function AnnouncementBar({ lang }: AnnouncementBarProps) {
 
   const SETTINGS = config.settings;
   
-  const messages = lang === 'ar' ? ARABIC_MESSAGES : ENGLISH_MESSAGES;
-  const requestRef = useRef<number | null>(null);
-  const startTimeRef = useRef<number | null>(null);
-  const pausedTimeRef = useRef<number>(0);
+  // Find active announcements from configurations
+  const activeAnnouncements = (config.announcements || []).filter(a => a.active === true);
+  
+  let announcementsList = activeAnnouncements.map(a => a.text[lang] || a.text['ar'] || '');
+  const topBarText = (SETTINGS as any).topBarText?.[lang] || (SETTINGS as any).topBarText?.['ar'] || '';
+  if (topBarText) {
+    announcementsList = [topBarText];
+  } else if (announcementsList.length === 0) {
+    announcementsList = [
+      lang === 'ar' ? "مرحبًا بك في مركز خدمات Designs4you لخدمات ماكينات التطريز والدعم الفني المعتمد" : "Welcome to Designs4you Service Center for embroidery machines services and certified support"
+    ];
+  }
 
-  useEffect(() => {
-    // Reset index when language switches to avoid out of bounds (though both have length 6)
-    setIndex(0);
-    setProgress(0);
-    startTimeRef.current = null;
-    pausedTimeRef.current = 0;
-  }, [lang]);
+  // Duplicate list if short to prevent visual gaps on wider desktop displays
+  let displayList = [...announcementsList];
+  if (displayList.length === 1) {
+    displayList = [displayList[0], displayList[0], displayList[0], displayList[0]];
+  } else if (displayList.length === 2) {
+    displayList = [displayList[0], displayList[1], displayList[0], displayList[1]];
+  }
 
-  useEffect(() => {
-    const tick = (timestamp: number) => {
-      if (!startTimeRef.current) {
-        startTimeRef.current = timestamp - pausedTimeRef.current;
+  // Compute overall character length for a unified scrolling velocity
+  const totalChars = displayList.reduce((sum, text) => sum + text.length, 0);
+  const speedSetting = SETTINGS.announcementSpeed || 3; // default is 3 (Medium)
+  const speedFactor = speedSetting === 1 ? 0.35 : speedSetting === 2 ? 0.65 : speedSetting === 3 ? 1.0 : speedSetting === 4 ? 1.5 : 2.2;
+  
+  // Calculate duration proportional to character count to maintain uniform visual speed
+  const duration = Math.max(8, (totalChars * 0.22) / speedFactor);
+
+  // We enforce 'ltr' rendering on the scrolling flex track to guarantee consistent animation vector direction
+  // regardless of active user locale, while preserving the actual language text layout direction.
+  const keyframesStyle = `
+    @keyframes marquee-scroll {
+      0% {
+        transform: translate3d(0, 0, 0);
       }
-
-      const elapsed = timestamp - startTimeRef.current;
-
-      if (isHovered) {
-        // Just record how much elapsed time we have so we can resume
-        pausedTimeRef.current = elapsed;
-        requestRef.current = requestAnimationFrame(tick);
-        return;
+      100% {
+        transform: translate3d(-50%, 0, 0);
       }
-
-      // Calculate progress percentage
-      const newProgress = Math.min((elapsed / ROTATION_TIME) * 100, 100);
-      setProgress(newProgress);
-
-      if (elapsed >= ROTATION_TIME) {
-        setIndex((prev) => (prev + 1) % messages.length);
-        startTimeRef.current = timestamp;
-        setProgress(0);
-        pausedTimeRef.current = 0;
-      }
-
-      requestRef.current = requestAnimationFrame(tick);
-    };
-
-    requestRef.current = requestAnimationFrame(tick);
-
-    return () => {
-      if (requestRef.current) {
-        cancelAnimationFrame(requestRef.current);
-      }
-    };
-  }, [isHovered, messages.length]);
-
-  // Handle manual tab hover pause
-  const handleMouseEnter = () => {
-    setIsHovered(true);
-  };
-
-  const handleMouseLeave = () => {
-    setIsHovered(false);
-    // Resume animation from where it was paused
-    startTimeRef.current = null; 
-  };
+    }
+    .animate-marquee-custom {
+      display: flex;
+      width: max-content;
+      animation: marquee-scroll ${duration}s linear infinite;
+    }
+  `;
 
   return (
     <div 
-      className="relative w-full h-[42px] bg-gradient-to-r from-[#0A84FF] to-[#0066FF] text-white overflow-hidden flex items-center justify-between px-4 md:px-8 border-b border-white/15 shadow-md select-none z-50 font-semibold text-xs md:text-sm"
-      onMouseEnter={handleMouseEnter}
-      onMouseLeave={handleMouseLeave}
+      className="relative w-full min-h-[40px] py-2 bg-gradient-to-r from-[#0A84FF] to-[#0066FF] text-white flex items-center justify-between px-4 md:px-8 border-b border-white/15 shadow-md select-none z-50 font-semibold text-xs md:text-sm transition-all"
       dir={lang === 'ar' ? 'rtl' : 'ltr'}
       style={{ fontFamily: lang === 'ar' ? "'Cairo', sans-serif" : "'Poppins', sans-serif" }}
     >
-      {/* Dynamic Progress indicator (bottom border) */}
-      <div 
-        className="absolute bottom-0 left-0 h-[2.5px] bg-white/45 transition-all duration-100 ease-linear"
-        style={{ 
-          width: `${progress}%`,
-          right: lang === 'ar' ? 0 : 'auto',
-          left: lang === 'en' ? 0 : 'auto',
-        }}
-      />
-
-      {/* Quick Action left text/icon on desktop */}
-      <div className="hidden sm:flex items-center gap-2 text-white/95">
-        <Phone size={13} className="animate-bounce" />
+      {/* Quick Action phone text/icon on desktop */}
+      <div className="hidden sm:flex items-center gap-2 text-white/95 shrink-0 z-10 bg-gradient-to-r from-[#0A84FF] to-[#0A84FF]/90 pr-2">
+        <Phone size={13} className="animate-bounce text-yellow-300" />
         <a 
           href={`tel:${SETTINGS.phone}`}
           className="hover:underline transition-all tracking-wider text-[11px]"
@@ -137,29 +85,49 @@ export default function AnnouncementBar({ lang }: AnnouncementBarProps) {
         </a>
       </div>
 
-      {/* Animated Sliding Message */}
-      <div className="flex-1 flex items-center justify-center text-center overflow-hidden h-full">
-        <AnimatePresence mode="wait">
-          <motion.div
-            key={index + '-' + lang}
-            initial={{ opacity: 0, y: 12 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -12 }}
-            transition={{ duration: 0.35, ease: "easeInOut" }}
-            className="flex items-center gap-2 cursor-pointer font-semibold text-[11px] sm:text-xs md:text-sm"
-            onClick={() => {
-              // Open WhatsApp on click as standard shortcut
-              window.open(`https://wa.me/${SETTINGS.whatsapp}`, '_blank');
-            }}
-          >
-            <span>{messages[index]}</span>
-          </motion.div>
-        </AnimatePresence>
+      {/* Scrolling dynamic announcement marquee */}
+      <div className="flex-1 overflow-hidden relative mx-2 sm:mx-4 flex items-center" dir="ltr">
+        <style>{keyframesStyle}</style>
+        <div className="animate-marquee-custom">
+          {/* First loop track */}
+          <div className="flex items-center gap-12 shrink-0 pr-12">
+            {displayList.map((text, i) => (
+              <div 
+                key={`b1-${i}`}
+                onClick={() => {
+                  window.open(`https://wa.me/${SETTINGS.whatsapp}`, '_blank');
+                }}
+                className="flex items-center gap-2.5 cursor-pointer hover:text-yellow-200 transition-all text-[11px] sm:text-xs md:text-sm font-bold"
+                dir={lang === 'ar' ? 'rtl' : 'ltr'}
+              >
+                <Sparkles size={13} className="shrink-0 text-yellow-300 animate-pulse" />
+                <span>{text}</span>
+              </div>
+            ))}
+          </div>
+
+          {/* Second identical loop track for seamless scrolling junction */}
+          <div className="flex items-center gap-12 shrink-0 pr-12" aria-hidden="true">
+            {displayList.map((text, i) => (
+              <div 
+                key={`b2-${i}`}
+                onClick={() => {
+                  window.open(`https://wa.me/${SETTINGS.whatsapp}`, '_blank');
+                }}
+                className="flex items-center gap-2.5 cursor-pointer hover:text-yellow-200 transition-all text-[11px] sm:text-xs md:text-sm font-bold"
+                dir={lang === 'ar' ? 'rtl' : 'ltr'}
+              >
+                <Sparkles size={13} className="shrink-0 text-yellow-300 animate-pulse" />
+                <span>{text}</span>
+              </div>
+            ))}
+          </div>
+        </div>
       </div>
 
-      {/* Quick Action right text/icon on desktop */}
-      <div className="hidden sm:flex items-center gap-2 text-white/95">
-        <MessageCircle size={14} className="animate-pulse" />
+      {/* Quick Action WhatsApp direct chat on desktop */}
+      <div className="hidden sm:flex items-center gap-2 text-white/95 shrink-0 z-10 bg-gradient-to-l from-[#0066FF] to-[#0066FF]/90 pl-2">
+        <MessageCircle size={14} className="animate-pulse text-yellow-300" />
         <a 
           href={`https://wa.me/${SETTINGS.whatsapp}`}
           target="_blank"

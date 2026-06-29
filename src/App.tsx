@@ -23,7 +23,10 @@ import {
   Upload,
   FileUp,
   FileCheck,
-  X
+  X,
+  HelpCircle,
+  ChevronDown,
+  ChevronUp
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { SETTINGS } from './settings';
@@ -34,8 +37,287 @@ import PortfolioGallery from './components/PortfolioGallery';
 import VideoGallery from './components/VideoGallery';
 import AdminDashboard from './components/AdminDashboard';
 import { Star, ShieldCheck, Clock, Award, Users, ThumbsUp, Video as VideoIcon } from 'lucide-react';
-import { stateStore } from './lib/stateStore';
+import { stateStore, addMaintenanceBooking, uploadFile, addQuickQuote } from './lib/stateStore';
 import contentData from '../assets/data/content.json';
+
+interface BannerCarouselProps {
+  banners: any[];
+  lang: Language;
+  onServiceClick: (link: string) => void;
+}
+
+function BannerCarousel({ banners, lang, onServiceClick }: BannerCarouselProps) {
+  const [currentSlideIdx, setCurrentSlideIdx] = useState(0);
+
+  useEffect(() => {
+    if (!banners || banners.length <= 1) return;
+    const interval = setInterval(() => {
+      setCurrentSlideIdx(prev => (prev + 1) % banners.length);
+    }, 6000);
+    return () => clearInterval(interval);
+  }, [banners?.length]);
+
+  if (!banners || banners.length === 0) {
+    const defaultTitle = TRANSLATIONS[lang]?.heroTitle || (lang === 'ar' ? 'ديزاينز فور يو لخدمات ماكينات التطريز' : 'Designs4you Embroidery Machine Services');
+    const defaultDesc = TRANSLATIONS[lang]?.heroDesc || (lang === 'ar' ? 'المركز المتكامل والمعتمد الأول لصيانة وقطع غيار ماكينات التطريز والدعم الفني في الشرق الأوسط.' : 'The premier full-service certified center for embroidery machine maintenance, original spare parts, and support.');
+    return (
+      <div className="text-center max-w-3xl mx-auto py-12 px-6">
+        <h1 className="text-3xl sm:text-4xl md:text-5xl font-extrabold tracking-tight text-white mb-4 leading-tight">
+          {defaultTitle}
+        </h1>
+        <p className="text-sm sm:text-base md:text-lg text-gray-400 leading-relaxed font-light">
+          {defaultDesc}
+        </p>
+      </div>
+    );
+  }
+
+  const activeSlide = banners[currentSlideIdx];
+
+  return (
+    <div className="relative w-full h-full min-h-[350px] sm:min-h-[400px] flex flex-col justify-center p-6 sm:p-12 text-center overflow-hidden animate-fade-in">
+      {/* Background Media container */}
+      <div className="absolute inset-0 z-0">
+        {activeSlide.mediaType === 'video' ? (
+          <video
+            src={activeSlide.mediaUrl}
+            autoPlay
+            loop
+            muted
+            playsInline
+            className="w-full h-full object-cover opacity-35"
+          />
+        ) : (
+          <img
+            src={activeSlide.mediaUrl}
+            alt=""
+            className="w-full h-full object-cover opacity-35"
+            referrerPolicy="no-referrer"
+          />
+        )}
+        <div className="absolute inset-0 bg-gradient-to-t from-[#111111] via-transparent to-transparent" />
+      </div>
+
+      {/* Slide Content */}
+      <div className="relative z-10 max-w-3xl mx-auto space-y-4">
+        <motion.div
+          key={activeSlide.id + '_pill'}
+          initial={{ opacity: 0, scale: 0.9 }}
+          animate={{ opacity: 1, scale: 1 }}
+          className="inline-flex items-center gap-1.5 px-3.5 py-1 rounded-full border border-[#0A84FF]/20 bg-[#0A84FF]/10 text-xs text-[#0A84FF] font-medium"
+        >
+          <Sparkles size={12} />
+          <span>{lang === 'ar' ? "مركز الخدمة المعتمد الأول" : "The #1 Authorized Service Center"}</span>
+        </motion.div>
+
+        <motion.h1
+          key={activeSlide.id + '_h1'}
+          initial={{ opacity: 0, y: 15 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="text-2xl sm:text-3xl md:text-5xl font-black tracking-tight text-white leading-tight"
+        >
+          {activeSlide.title[lang] || activeSlide.title['ar']}
+        </motion.h1>
+
+        <motion.p
+          key={activeSlide.id + '_p'}
+          initial={{ opacity: 0, y: 15 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.1 }}
+          className="text-xs sm:text-sm md:text-base text-gray-300 leading-relaxed max-w-2xl mx-auto font-light"
+        >
+          {activeSlide.desc[lang] || activeSlide.desc['ar']}
+        </motion.p>
+
+        <motion.div
+          key={activeSlide.id + '_btn'}
+          initial={{ opacity: 0, scale: 0.95 }}
+          animate={{ opacity: 1, scale: 1 }}
+          transition={{ delay: 0.2 }}
+          className="pt-4"
+        >
+          <button
+            onClick={() => {
+              onServiceClick(activeSlide.btnLink || 'quote');
+            }}
+            className="px-6 py-3 rounded-xl bg-gradient-to-r from-blue-600 to-cyan-600 hover:from-blue-500 hover:to-cyan-500 text-white font-bold text-xs sm:text-sm shadow-lg shadow-blue-500/20 transition-all active:scale-95 cursor-pointer"
+          >
+            {activeSlide.btnText[lang] || activeSlide.btnText['ar']}
+          </button>
+        </motion.div>
+      </div>
+
+      {/* Bullets navigation indicator */}
+      {banners.length > 1 && (
+        <div className="absolute bottom-4 left-1/2 transform -translate-x-1/2 flex gap-2 z-20">
+          {banners.map((_, dotIdx) => (
+            <button
+              key={dotIdx}
+              onClick={() => setCurrentSlideIdx(dotIdx)}
+              className={`w-2 h-2 rounded-full transition-all ${
+                dotIdx === currentSlideIdx ? 'bg-[#0A84FF] w-4' : 'bg-white/20'
+              }`}
+            />
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+interface MaintenanceBookingFormProps {
+  lang: Language;
+}
+
+function MaintenanceBookingForm({ lang }: MaintenanceBookingFormProps) {
+  const [bookingSent, setBookingSent] = useState(false);
+  const [bookingLoading, setBookingLoading] = useState(false);
+  const [bFile, setBFile] = useState<File | null>(null);
+  const [bFileUrl, setBFileUrl] = useState('');
+  const [bFileUploading, setBFileUploading] = useState(false);
+
+  const handleBFormSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const target = e.target as HTMLFormElement;
+    const name = (target.elements.namedItem('bName') as HTMLInputElement).value;
+    const phone = (target.elements.namedItem('bPhone') as HTMLInputElement).value;
+    const whatsapp = (target.elements.namedItem('bWhatsapp') as HTMLInputElement).value;
+    const emailVal = (target.elements.namedItem('bEmail') as HTMLInputElement).value;
+    const machineType = (target.elements.namedItem('bType') as HTMLInputElement).value;
+    const machineModel = (target.elements.namedItem('bModel') as HTMLInputElement).value;
+    const problemDesc = (target.elements.namedItem('bDesc') as HTMLTextAreaElement).value;
+    const contactTime = (target.elements.namedItem('bTime') as HTMLInputElement).value;
+
+    if (!name || !phone || !problemDesc) {
+      alert(lang === 'ar' ? 'يرجى ملء الحقول الإلزامية الأساسية.' : 'Please fill all mandatory fields.');
+      return;
+    }
+
+    setBookingLoading(true);
+    try {
+      await addMaintenanceBooking({
+        name,
+        phone,
+        whatsapp,
+        email: emailVal,
+        machineType,
+        machineModel,
+        problemDesc,
+        fileUrl: bFileUrl,
+        fileName: bFile ? bFile.name : '',
+        contactTime
+      });
+      setBookingSent(true);
+      setBFile(null);
+      setBFileUrl('');
+    } catch (err) {
+      console.error(err);
+      alert(lang === 'ar' ? 'فشل إرسال حجز الصيانة.' : 'Submission failed.');
+    } finally {
+      setBookingLoading(false);
+    }
+  };
+
+  if (bookingSent) {
+    return (
+      <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="p-4 bg-green-500/10 border border-green-500/20 rounded-2xl text-center space-y-2">
+        <Check className="w-8 h-8 text-green-400 mx-auto" />
+        <p className="text-xs sm:text-sm font-bold text-white">{lang === 'ar' ? 'تم استلام طلب حجز الصيانة بنجاح!' : 'Maintenance booking request received!'}</p>
+        <p className="text-[10px] text-gray-400">{lang === 'ar' ? 'سيقوم المهندس المتخصص بالتواصل معك عبر واتساب لتأكيد موعد الجلسة المباشرة.' : 'A certified technician will contact you on WhatsApp to confirm your slot.'}</p>
+        <button onClick={() => setBookingSent(false)} className="px-4 py-1.5 bg-[#0A84FF] hover:bg-blue-500 text-white rounded-xl text-[10px] font-bold mt-2 cursor-pointer">{lang === 'ar' ? 'حجز طلب آخر' : 'Book Another Session'}</button>
+      </motion.div>
+    );
+  }
+
+  return (
+    <form onSubmit={handleBFormSubmit} className="space-y-3.5 bg-black/40 border border-white/5 p-4 sm:p-6 rounded-2xl text-start">
+      <h4 className="text-xs text-[#0A84FF] font-black uppercase tracking-wider">{lang === 'ar' ? 'نموذج حجز صيانة عن بعد فوري' : 'Technical Support Booking Form'}</h4>
+      
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
+        <div className="space-y-1">
+          <label className="text-gray-400 font-bold">{lang === 'ar' ? 'الاسم بالكامل *' : 'Full Name *'}</label>
+          <input type="text" name="bName" required className="w-full bg-white/5 border border-white/10 rounded-xl p-2.5 text-white" />
+        </div>
+        <div className="space-y-1">
+          <label className="text-gray-400 font-bold">{lang === 'ar' ? 'رقم الهاتف للاتصال *' : 'Phone number *'}</label>
+          <input type="text" name="bPhone" required className="w-full bg-white/5 border border-white/10 rounded-xl p-2.5 text-white font-mono" />
+        </div>
+        <div className="space-y-1">
+          <label className="text-gray-400 font-bold">{lang === 'ar' ? 'رقم الواتساب الرئيسي للتواصل' : 'WhatsApp Number'}</label>
+          <input type="text" name="bWhatsapp" className="w-full bg-white/5 border border-white/10 rounded-xl p-2.5 text-white font-mono" />
+        </div>
+        <div className="space-y-1">
+          <label className="text-gray-400 font-bold">{lang === 'ar' ? 'البريد الإلكتروني' : 'Email Address'}</label>
+          <input type="email" name="bEmail" className="w-full bg-white/5 border border-white/10 rounded-xl p-2.5 text-white font-mono" />
+        </div>
+        <div className="space-y-1">
+          <label className="text-gray-400 font-bold">{lang === 'ar' ? 'نوع الماكينة (براذر، تاجيما، صيني..)' : 'Machine Brand (Tajima, Brother..)'}</label>
+          <input type="text" name="bType" className="w-full bg-white/5 border border-white/10 rounded-xl p-2.5 text-white" />
+        </div>
+        <div className="space-y-1">
+          <label className="text-gray-400 font-bold">{lang === 'ar' ? 'الموديل / سنة الصنع' : 'Machine Model / Year'}</label>
+          <input type="text" name="bModel" className="w-full bg-white/5 border border-white/10 rounded-xl p-2.5 text-white" />
+        </div>
+        <div className="space-y-1 sm:col-span-2">
+          <label className="text-gray-400 font-bold">{lang === 'ar' ? 'شرح تفصيلي للمشكلة أو العطل *' : 'Problem Description *'}</label>
+          <textarea name="bDesc" required rows={3} className="w-full bg-white/5 border border-white/10 rounded-xl p-2.5 text-white resize-none" />
+        </div>
+        
+        {/* Optional File/Video upload */}
+        <div className="space-y-1 sm:col-span-2">
+          <label className="text-gray-400 font-bold flex justify-between items-center">
+            <span>{lang === 'ar' ? 'إرفاق صورة أو فيديو للمشكلة (اختياري)' : 'Upload error photo or video (Optional)'}</span>
+            {bFileUploading && <Loader2 size={12} className="animate-spin text-[#0A84FF]" />}
+          </label>
+          <div className="flex gap-2">
+            <input 
+              type="text" 
+              readOnly 
+              value={bFileUrl ? (bFile?.name || (lang === 'ar' ? 'تم تحميل الملف المرفق' : 'File uploaded successfully')) : ''} 
+              placeholder={lang === 'ar' ? 'لم يتم إرفاق ملفات عطل' : 'No diagnostic files attached'} 
+              className="flex-1 bg-white/5 border border-white/10 rounded-xl p-2.5 text-white" 
+            />
+            <input 
+              type="file" 
+              onChange={async (e) => {
+                const file = e.target.files?.[0];
+                if (!file) return;
+                setBFileUploading(true);
+                try {
+                  const url = await uploadFile(file, 'bookings');
+                  setBFile(file);
+                  setBFileUrl(url);
+                } catch (err) {
+                  console.error(err);
+                } finally {
+                  setBFileUploading(false);
+                }
+              }} 
+              accept="image/*,video/*" 
+              id="bFileInput" 
+              className="hidden" 
+            />
+            <button type="button" onClick={() => document.getElementById('bFileInput')?.click()} className="px-4 py-2 bg-white/5 border border-white/10 rounded-xl text-white font-bold cursor-pointer hover:bg-white/10">{lang === 'ar' ? 'إرفاق' : 'Browse'}</button>
+          </div>
+        </div>
+
+        <div className="space-y-1 sm:col-span-2">
+          <label className="text-gray-400 font-bold">{lang === 'ar' ? 'الوقت المفضل للتواصل الفوري' : 'Preferred contact time slot'}</label>
+          <input type="text" name="bTime" placeholder="مثال: من 5 مساءً حتى 9 مساءً" className="w-full bg-white/5 border border-white/10 rounded-xl p-2.5 text-white" />
+        </div>
+      </div>
+
+      <button 
+        type="submit" 
+        disabled={bookingLoading || bFileUploading}
+        className="w-full py-3 rounded-xl bg-gradient-to-r from-blue-600 to-cyan-600 hover:from-blue-500 hover:to-cyan-500 text-white font-bold text-xs sm:text-sm shadow-md cursor-pointer flex items-center justify-center gap-2"
+      >
+        {bookingLoading ? <Loader2 size={14} className="animate-spin" /> : <Wrench size={14} />}
+        <span>{lang === 'ar' ? 'إرسال طلب الحجز الفوري للمهندس' : 'Deploy Support Request'}</span>
+      </button>
+    </form>
+  );
+}
 
 function hexToRgb(hex: string): string {
   const cleanHex = hex.replace('#', '');
@@ -51,6 +333,7 @@ export default function App() {
 
   // Dynamic configuration state
   const [config, setConfig] = useState(() => stateStore.getConfig());
+  const [openFaqId, setOpenFaqId] = useState<string | null>(null);
 
   useEffect(() => {
     const handleConfigChange = () => {
@@ -101,6 +384,62 @@ export default function App() {
     };
   }, []);
 
+  // FAQ accordion state
+  const [openFaqIndex, setOpenFaqIndex] = useState<number | null>(null);
+
+  // Testimonials client-side submission state
+  const [showReviewModal, setShowReviewModal] = useState(false);
+  const [reviewForm, setReviewForm] = useState({
+    name: '',
+    email: '',
+    phone: '',
+    country: 'EG',
+    rating: 5,
+    comment: ''
+  });
+  const [reviewSubmitting, setReviewSubmitting] = useState(false);
+  const [reviewSuccess, setReviewSuccess] = useState(false);
+
+  const handleReviewSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!reviewForm.name || !reviewForm.email || !reviewForm.phone || !reviewForm.comment) {
+      return;
+    }
+
+    setReviewSubmitting(true);
+    try {
+      const newReview = {
+        id: 'rev_' + Date.now(),
+        name: reviewForm.name,
+        email: reviewForm.email,
+        phone: reviewForm.phone,
+        country: reviewForm.country,
+        rating: reviewForm.rating,
+        comment: { ar: reviewForm.comment, en: reviewForm.comment },
+        type: { ar: lang === 'ar' ? 'عميل الموقع' : 'Website Client', en: 'Website Client' },
+        approved: false,
+        status: 'pending',
+        order: config.reviews.length
+      };
+
+      await stateStore.addPendingReview(newReview);
+      
+      setReviewSuccess(true);
+      setReviewForm({
+        name: '',
+        email: '',
+        phone: '',
+        country: 'EG',
+        rating: 5,
+        comment: ''
+      });
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setReviewSubmitting(false);
+    }
+  };
+
   // Interactive Form State for Quick Quote
   const [form, setForm] = useState<QuoteForm>({
     name: '',
@@ -126,10 +465,13 @@ export default function App() {
   useEffect(() => {
     const detectCountry = async () => {
       try {
-        const res = await fetch('https://ipapi.co/json/');
+        let res = await fetch('https://ipapi.co/json/');
+        if (!res.ok) {
+          res = await fetch('https://ip-api.com/json');
+        }
         if (res.ok) {
           const data = await res.json();
-          const countryCode = data.country_code; // e.g. "EG", "SA", "AE"
+          const countryCode = (data.country_code || data.countryCode)?.toUpperCase();
           if (countryCode && ['EG', 'SA', 'AE'].includes(countryCode)) {
             setForm(prev => ({ 
               ...prev, 
@@ -145,7 +487,7 @@ export default function App() {
           }
         }
       } catch (err) {
-        console.error('Country detection failed, defaulting to EG', err);
+        console.warn('Country detection failed (defaulted to EG):', err);
       }
     };
     detectCountry();
@@ -165,11 +507,11 @@ export default function App() {
       return;
     }
 
-    // Validate extension
-    const allowedExtensions = ['ai', 'cdr', 'dst', 'emb', 'pdf', 'png', 'jpg', 'jpeg'];
+    // Validate extension (Images, Videos, and Design files)
+    const allowedExtensions = ['ai', 'cdr', 'dst', 'emb', 'pdf', 'png', 'jpg', 'jpeg', 'webp', 'mp4', 'mov', 'avi', 'mkv'];
     const fileExtension = file.name.split('.').pop()?.toLowerCase() || '';
     if (!allowedExtensions.includes(fileExtension)) {
-      setFileError(lang === 'ar' ? 'صيغة الملف غير مدعومة. الصيغ المسموحة: AI, CDR, DST, EMB, PDF, PNG, JPG, JPEG' : 'File format not supported. Allowed: AI, CDR, DST, EMB, PDF, PNG, JPG, JPEG');
+      setFileError(lang === 'ar' ? 'صيغة الملف غير مدعومة. الصيغ المسموحة: الصور، الفيديوهات، وملفات التصميم' : 'File format not supported. Supported: Images, Videos, and Design files.');
       setSelectedFile(null);
       setForm(prev => ({ ...prev, designFileName: undefined, designFileSize: undefined }));
       return;
@@ -390,6 +732,22 @@ ${currentDate}
 Time:
 ${currentTime}`;
 
+    // Save to Firestore/Local database as well to populate our Stats & Customers CRM!
+    const quoteData = {
+      name: form.name,
+      phone: form.phone,
+      country: form.country,
+      region: form.region,
+      department: form.department,
+      service: form.service,
+      notes: form.notes,
+      requestId: form.requestId || `REQ-${Date.now().toString()}`,
+      designFileName: form.designFileName,
+      designFileSize: form.designFileSize,
+      status: 'new' as const,
+    };
+    addQuickQuote(quoteData).catch(err => console.error('Failed to save quick quote in database:', err));
+
     // Increment Request ID count for subsequent request tracking
     let currentCount = localStorage.getItem('designs4you_request_count');
     let countNum = currentCount ? parseInt(currentCount, 10) : 0;
@@ -587,37 +945,13 @@ ${currentTime}`;
               transition={{ duration: 0.4, ease: 'easeOut' }}
               className="flex-1 flex flex-col justify-center"
             >
-              {/* Hero Banner Grid layout */}
-              <div className="text-center max-w-3xl mx-auto mb-12 md:mb-16">
-                <motion.div
-                  initial={{ opacity: 0, scale: 0.9 }}
-                  animate={{ opacity: 1, scale: 1 }}
-                  transition={{ delay: 0.1 }}
-                  className="inline-flex items-center gap-1.5 px-3.5 py-1 rounded-full border border-[#0A84FF]/20 bg-[#0A84FF]/10 text-xs text-[#0A84FF] font-medium mb-4"
-                >
-                  <Sparkles size={12} />
-                  <span>{lang === 'ar' ? "مركز الخدمة المعتمد الأول" : "The #1 Authorized Service Center"}</span>
-                </motion.div>
-                
-                <h1 className="text-3xl sm:text-4xl md:text-5xl font-extrabold tracking-tight text-white mb-4 leading-tight">
-                  {SETTINGS.heroTitle?.[lang] || t.heroTitle}
-                </h1>
-                
-                <p className="text-sm sm:text-base md:text-lg text-gray-400 leading-relaxed font-light px-4">
-                  {SETTINGS.heroDesc?.[lang] || t.heroDesc}
-                </p>
-                
-                {/* Visual Pill Subtitles */}
-                <div className="flex flex-wrap items-center justify-center gap-2 mt-6">
-                  {t.subtitle.split('•').map((item, idx) => (
-                    <span 
-                      key={idx}
-                      className="px-3 py-1 text-xs rounded-md bg-white/5 border border-white/5 text-gray-300 font-medium"
-                    >
-                      {item.trim()}
-                    </span>
-                  ))}
-                </div>
+              {/* Dynamic Banner Carousel Slider */}
+              <div className="relative w-full max-w-5xl mx-auto mb-12 md:mb-16 rounded-3xl overflow-hidden border border-white/10 shadow-2xl bg-black/40 min-h-[350px] flex items-center justify-center">
+                <BannerCarousel
+                  banners={config.banners || []}
+                  lang={lang}
+                  onServiceClick={handleServiceClick}
+                />
               </div>
 
               {/* Grid of Bento Services Cards */}
@@ -721,89 +1055,31 @@ ${currentTime}`;
                   </p>
                 </div>
 
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
-                  {/* Card 1 */}
-                  <motion.div
-                    initial={{ opacity: 0, y: 20 }}
-                    whileInView={{ opacity: 1, y: 0 }}
-                    viewport={{ once: true }}
-                    whileHover={{ y: -4 }}
-                    className="p-6 rounded-2xl border border-white/10 bg-white/[0.01] hover:border-[#0A84FF]/30 transition-all text-center flex flex-col justify-between"
-                  >
-                    <div>
-                      <div className="w-12 h-12 rounded-xl bg-[#0A84FF]/10 border border-[#0A84FF]/20 flex items-center justify-center text-[#0A84FF] mx-auto mb-4">
-                        <Palette size={20} />
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-6">
+                  {(config.pricingList || []).map((card, idx) => (
+                    <motion.div
+                      key={card.id}
+                      initial={{ opacity: 0, y: 20 }}
+                      whileInView={{ opacity: 1, y: 0 }}
+                      viewport={{ once: true }}
+                      transition={{ delay: 0.05 * idx }}
+                      whileHover={{ y: -4 }}
+                      className="p-6 rounded-2xl border border-white/10 bg-white/[0.01] hover:border-[#0A84FF]/30 transition-all text-center flex flex-col justify-between"
+                    >
+                      <div>
+                        <div className="w-12 h-12 rounded-xl bg-[#0A84FF]/10 border border-[#0A84FF]/20 flex items-center justify-center text-[#0A84FF] mx-auto mb-4">
+                          {renderIcon(card.icon, "w-5 h-5")}
+                        </div>
+                        <h3 className="text-sm font-bold text-gray-300 mb-2">{card.title[lang]}</h3>
                       </div>
-                      <h3 className="text-sm font-bold text-gray-300 mb-2">{lang === 'ar' ? 'تصميم تطريز' : 'Embroidery Design'}</h3>
-                    </div>
-                    <div className="mt-4">
-                      <span className="text-2xl font-black text-white block">{SETTINGS.prices.embroidery[lang]}</span>
-                      <span className="text-[10px] text-gray-500 block mt-1">{lang === 'ar' ? 'للتصميم المعتمد' : 'per approved design'}</span>
-                    </div>
-                  </motion.div>
-
-                  {/* Card 2 */}
-                  <motion.div
-                    initial={{ opacity: 0, y: 20 }}
-                    whileInView={{ opacity: 1, y: 0 }}
-                    viewport={{ once: true }}
-                    transition={{ delay: 0.1 }}
-                    whileHover={{ y: -4 }}
-                    className="p-6 rounded-2xl border border-white/10 bg-white/[0.01] hover:border-[#25D366]/30 transition-all text-center flex flex-col justify-between"
-                  >
-                    <div>
-                      <div className="w-12 h-12 rounded-xl bg-[#25D366]/10 border border-[#25D366]/20 flex items-center justify-center text-[#25D366] mx-auto mb-4">
-                        <Shirt size={20} />
+                      <div className="mt-4">
+                        <span className="text-2xl font-black text-white block">
+                          {card.price} <span className="text-xs font-bold text-[#0A84FF]">{config.settings.currency?.[lang] || (lang === 'ar' ? "ج.م" : "EGP")}</span>
+                        </span>
+                        <span className="text-[10px] text-gray-500 block mt-1">{card.unit?.[lang]}</span>
                       </div>
-                      <h3 className="text-sm font-bold text-gray-300 mb-2">{lang === 'ar' ? 'تصاميم وطباعة DTF' : 'DTF Design'}</h3>
-                    </div>
-                    <div className="mt-4">
-                      <span className="text-2xl font-black text-white block">{SETTINGS.prices.dtf[lang]}</span>
-                      <span className="text-[10px] text-gray-500 block mt-1">{lang === 'ar' ? 'للمتر المطبوع' : 'per printed meter'}</span>
-                    </div>
-                  </motion.div>
-
-                  {/* Card 3 */}
-                  <motion.div
-                    initial={{ opacity: 0, y: 20 }}
-                    whileInView={{ opacity: 1, y: 0 }}
-                    viewport={{ once: true }}
-                    transition={{ delay: 0.2 }}
-                    whileHover={{ y: -4 }}
-                    className="p-6 rounded-2xl border border-white/10 bg-white/[0.01] hover:border-blue-500/30 transition-all text-center flex flex-col justify-between"
-                  >
-                    <div>
-                      <div className="w-12 h-12 rounded-xl bg-blue-500/10 border border-blue-500/20 flex items-center justify-center text-blue-400 mx-auto mb-4">
-                        <Wrench size={20} />
-                      </div>
-                      <h3 className="text-sm font-bold text-gray-300 mb-2">{lang === 'ar' ? 'صيانة ودعم فني' : 'Maintenance'}</h3>
-                    </div>
-                    <div className="mt-4">
-                      <span className="text-2xl font-black text-white block">{SETTINGS.prices.maintenance[lang]}</span>
-                      <span className="text-[10px] text-gray-500 block mt-1">{lang === 'ar' ? 'للكشف والزيارة' : 'per diagnostic visit'}</span>
-                    </div>
-                  </motion.div>
-
-                  {/* Card 4 */}
-                  <motion.div
-                    initial={{ opacity: 0, y: 20 }}
-                    whileInView={{ opacity: 1, y: 0 }}
-                    viewport={{ once: true }}
-                    transition={{ delay: 0.3 }}
-                    whileHover={{ y: -4 }}
-                    className="p-6 rounded-2xl border border-white/10 bg-white/[0.01] hover:border-amber-500/30 transition-all text-center flex flex-col justify-between"
-                  >
-                    <div>
-                      <div className="w-12 h-12 rounded-xl bg-amber-500/10 border border-amber-500/20 flex items-center justify-center text-amber-400 mx-auto mb-4">
-                        <GraduationCap size={20} />
-                      </div>
-                      <h3 className="text-sm font-bold text-gray-300 mb-2">{lang === 'ar' ? 'كورس برنامج ويلكوم' : 'Wilcom Course'}</h3>
-                    </div>
-                    <div className="mt-4">
-                      <span className="text-2xl font-black text-white block">{SETTINGS.prices.course[lang]}</span>
-                      <span className="text-[10px] text-gray-500 block mt-1">{lang === 'ar' ? 'للكورس الشامل' : 'per complete course'}</span>
-                    </div>
-                  </motion.div>
+                    </motion.div>
+                  ))}
                 </div>
               </div>
 
@@ -921,7 +1197,7 @@ ${currentTime}`;
                 </div>
 
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-                  {(contentData.reviews || []).map((review: any, index: number) => {
+                  {((contentData.reviews || []).filter((r: any) => r.approved !== false && r.status !== 'pending' && r.status !== 'rejected')).map((review: any, index: number) => {
                     const initials = review.name ? review.name.split(' ').map((n: string) => n[0]).join('').substring(0, 2).toUpperCase() : 'U';
                     const gradientClasses = [
                       'from-[#0A84FF] to-blue-500',
@@ -974,7 +1250,227 @@ ${currentTime}`;
                     );
                   })}
                 </div>
+
+                {/* Submit review button */}
+                <div className="text-center mt-12">
+                  <button
+                    onClick={() => {
+                      setReviewSuccess(false);
+                      setShowReviewModal(true);
+                    }}
+                    className="px-6 py-3 rounded-xl bg-gradient-to-r from-yellow-500 to-amber-500 hover:from-yellow-400 hover:to-amber-400 text-black font-black text-xs sm:text-sm shadow-lg hover:shadow-yellow-500/20 active:scale-95 transition-all cursor-pointer inline-flex items-center gap-2 font-bold"
+                  >
+                    <ThumbsUp size={14} />
+                    <span>{lang === 'ar' ? 'أضف تقييمك وتجربتك معنا' : 'Write a Review & Rate Us'}</span>
+                  </button>
+                </div>
+
+                {/* Review Form Modal */}
+                {showReviewModal && (
+                  <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
+                    <motion.div
+                      initial={{ opacity: 0, scale: 0.95 }}
+                      animate={{ opacity: 1, scale: 1 }}
+                      className="bg-[#0c0d10] border border-white/10 rounded-3xl p-6 sm:p-8 w-full max-w-lg space-y-4 relative shadow-2xl"
+                      dir={lang === 'ar' ? 'rtl' : 'ltr'}
+                      style={{ fontFamily: lang === 'ar' ? "'Cairo', sans-serif" : "'Poppins', sans-serif" }}
+                    >
+                      <button
+                        onClick={() => setShowReviewModal(false)}
+                        className="absolute top-4 right-4 text-gray-500 hover:text-white transition-colors p-1.5 hover:bg-white/5 rounded-full cursor-pointer"
+                      >
+                        <X size={18} />
+                      </button>
+
+                      <div className="text-center">
+                        <ThumbsUp className="w-8 h-8 text-yellow-500 mx-auto mb-2 animate-bounce" />
+                        <h3 className="text-md sm:text-lg font-black text-white">{lang === 'ar' ? 'أضف تقييمك للمركز' : 'Share Your Experience'}</h3>
+                        <p className="text-xs text-gray-400 mt-1">{lang === 'ar' ? 'يسعدنا سماع رأيك لتحسين خدماتنا باستمرار' : 'We love hearing your feedback to keep improving'}</p>
+                      </div>
+
+                      {reviewSuccess ? (
+                        <div className="text-center py-6 space-y-3">
+                          <div className="w-12 h-12 rounded-full bg-[#25D366]/10 text-[#25D366] flex items-center justify-center mx-auto border border-[#25D366]/20">
+                            <Check size={24} />
+                          </div>
+                          <p className="text-xs sm:text-sm font-bold text-white">
+                            {lang === 'ar' ? 'تم إرسال تقييمك للمراجعة بنجاح!' : 'Your review was submitted for review!'}
+                          </p>
+                          <p className="text-[11px] text-gray-400">
+                            {lang === 'ar' 
+                              ? 'شكرًا لك على مشاركة تجربتك. سيتم مراجعة التقييم واعتماده من قبل الإدارة قريبًا.' 
+                              : 'Thank you for sharing your experience. Our team will review and approve it shortly.'}
+                          </p>
+                          <button
+                            onClick={() => setShowReviewModal(false)}
+                            className="w-full py-2.5 rounded-xl bg-white/5 border border-white/10 text-white font-bold text-xs hover:bg-white/10 cursor-pointer"
+                          >
+                            {lang === 'ar' ? 'إغلاق النافذة' : 'Close'}
+                          </button>
+                        </div>
+                      ) : (
+                        <form onSubmit={handleReviewSubmit} className="space-y-4 text-start">
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                            <div className="space-y-1">
+                              <label className="text-[10px] text-gray-400 font-bold">{lang === 'ar' ? 'الاسم بالكامل *' : 'Full Name *'}</label>
+                              <input
+                                type="text"
+                                required
+                                value={reviewForm.name}
+                                onChange={e => setReviewForm(p => ({ ...p, name: e.target.value }))}
+                                placeholder="محمد أحمد"
+                                className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:ring-1 focus:ring-yellow-500"
+                              />
+                            </div>
+                            <div className="space-y-1">
+                              <label className="text-[10px] text-gray-400 font-bold">{lang === 'ar' ? 'رقم الهاتف *' : 'Phone Number *'}</label>
+                              <input
+                                type="tel"
+                                required
+                                value={reviewForm.phone}
+                                onChange={e => setReviewForm(p => ({ ...p, phone: e.target.value }))}
+                                placeholder="002010..."
+                                className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-xs text-white font-mono text-start focus:outline-none focus:ring-1 focus:ring-yellow-500"
+                              />
+                            </div>
+                          </div>
+
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                            <div className="space-y-1">
+                              <label className="text-[10px] text-gray-400 font-bold">{lang === 'ar' ? 'البريد الإلكتروني *' : 'Email *'}</label>
+                              <input
+                                type="email"
+                                required
+                                value={reviewForm.email}
+                                onChange={e => setReviewForm(p => ({ ...p, email: e.target.value }))}
+                                placeholder="example@mail.com"
+                                className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-xs text-white font-mono focus:outline-none focus:ring-1 focus:ring-yellow-500"
+                              />
+                            </div>
+                            <div className="space-y-1">
+                              <label className="text-[10px] text-gray-400 font-bold">{lang === 'ar' ? 'البلد / الدولة *' : 'Country *'}</label>
+                              <select
+                                value={reviewForm.country}
+                                onChange={e => setReviewForm(p => ({ ...p, country: e.target.value }))}
+                                className="w-full bg-[#0c0d10] border border-white/10 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:ring-1 focus:ring-yellow-500"
+                              >
+                                <option value="EG">🇪🇬 {lang === 'ar' ? 'مصر' : 'Egypt'}</option>
+                                <option value="SA">🇸🇦 {lang === 'ar' ? 'السعودية' : 'Saudi Arabia'}</option>
+                                <option value="AE">🇦🇪 {lang === 'ar' ? 'الإمارات' : 'UAE'}</option>
+                                <option value="YE">🇾🇪 {lang === 'ar' ? 'اليمن' : 'Yemen'}</option>
+                                <option value="OM">🇴🇲 {lang === 'ar' ? 'عمان' : 'Oman'}</option>
+                                <option value="QA">🇶🇦 {lang === 'ar' ? 'قطر' : 'Qatar'}</option>
+                                <option value="KW">🇰🇼 {lang === 'ar' ? 'الكويت' : 'Kuwait'}</option>
+                                <option value="BH">🇧🇭 {lang === 'ar' ? 'البحرين' : 'Bahrain'}</option>
+                                <option value="JO">🇯🇴 {lang === 'ar' ? 'الأردن' : 'Jordan'}</option>
+                                <option value="IQ">🇮🇶 {lang === 'ar' ? 'العراق' : 'Iraq'}</option>
+                                <option value="OTH">🌐 {lang === 'ar' ? 'دولة أخرى' : 'Other Country'}</option>
+                              </select>
+                            </div>
+                          </div>
+
+                          {/* Star Rating Select */}
+                          <div className="space-y-1 text-center">
+                            <label className="text-[10px] text-gray-400 font-bold block">{lang === 'ar' ? 'التقييم العام *' : 'Overall Rating *'}</label>
+                            <div className="flex items-center justify-center gap-1.5 mt-1">
+                              {[1, 2, 3, 4, 5].map((star) => (
+                                <button
+                                  key={star}
+                                  type="button"
+                                  onClick={() => setReviewForm(p => ({ ...p, rating: star }))}
+                                  className="text-amber-400 hover:scale-110 active:scale-95 transition-all cursor-pointer p-1"
+                                >
+                                  <Star size={24} fill={star <= reviewForm.rating ? "currentColor" : "none"} />
+                                </button>
+                              ))}
+                            </div>
+                          </div>
+
+                          <div className="space-y-1 text-start">
+                            <label className="text-[10px] text-gray-400 font-bold">{lang === 'ar' ? 'التعليق / الملاحظات *' : 'Comment / Review Notes *'}</label>
+                            <textarea
+                              required
+                              rows={3}
+                              value={reviewForm.comment}
+                              onChange={e => setReviewForm(p => ({ ...p, comment: e.target.value }))}
+                              placeholder={lang === 'ar' ? 'اكتب تجربتك معنا بالتفصيل...' : 'Write your feedback here...'}
+                              className="w-full bg-white/5 border border-white/10 rounded-xl p-3 text-xs text-white resize-none focus:outline-none focus:ring-1 focus:ring-yellow-500"
+                            />
+                          </div>
+
+                          <button
+                            type="submit"
+                            disabled={reviewSubmitting}
+                            className="w-full py-3 rounded-xl bg-gradient-to-r from-yellow-500 to-amber-500 hover:from-yellow-400 hover:to-amber-400 text-black font-black text-xs sm:text-sm shadow-md cursor-pointer flex items-center justify-center gap-2 font-bold"
+                          >
+                            {reviewSubmitting ? <Loader2 size={14} className="animate-spin" /> : <ThumbsUp size={14} />}
+                            <span>{lang === 'ar' ? 'إرسال التقييم للمراجعة' : 'Submit Review'}</span>
+                          </button>
+                        </form>
+                      )}
+                    </motion.div>
+                  </div>
+                )}
               </div>
+
+              {/* Dynamic FAQ Accordion Section */}
+              {config.faqs && config.faqs.length > 0 && (
+                <div className="py-16 border-t border-white/5 relative bg-[#111111]/10">
+                  <div className="text-center max-w-3xl mx-auto mb-12">
+                    <motion.div
+                      initial={{ opacity: 0, scale: 0.95 }}
+                      whileInView={{ opacity: 1, scale: 1 }}
+                      viewport={{ once: true }}
+                      className="inline-flex items-center gap-1.5 px-3.5 py-1 rounded-full border border-[#0A84FF]/20 bg-[#0A84FF]/10 text-xs text-[#0A84FF] font-medium mb-3"
+                    >
+                      <HelpCircle size={12} />
+                      <span>{lang === 'ar' ? 'الأسئلة الأكثر شيوعاً' : 'Frequently Asked Questions'}</span>
+                    </motion.div>
+                    <h2 className="text-3xl font-extrabold text-white mb-3">
+                      {lang === 'ar' ? 'الأسئلة الشائعة وإجاباتها' : 'FAQs & Answers'}
+                    </h2>
+                    <p className="text-sm text-gray-400">
+                      {lang === 'ar' ? 'كل ما تود معرفته عن خدمات Designs4you وتفاصيل الشحن والصيانة والدعم الفني.' : 'Everything you need to know about Designs4you services, support, maintenance, and training.'}
+                    </p>
+                  </div>
+
+                  <div className="max-w-3xl mx-auto space-y-4 px-4 sm:px-0">
+                    {config.faqs.map((faq: any) => {
+                      const isFaqOpen = openFaqId === faq.id;
+                      return (
+                        <div 
+                          key={faq.id} 
+                          className="rounded-2xl border border-white/10 bg-white/[0.01] hover:bg-white/[0.02] transition-all overflow-hidden"
+                        >
+                          <button
+                            onClick={() => setOpenFaqId(isFaqOpen ? null : faq.id)}
+                            className="w-full p-5 text-start flex items-center justify-between gap-4 font-bold text-sm sm:text-base text-white focus:outline-none cursor-pointer"
+                          >
+                            <span>{faq.question[lang] || faq.question['ar']}</span>
+                            <div className={`w-6 h-6 rounded-full bg-white/5 flex items-center justify-center text-gray-400 transition-transform duration-300 ${isFaqOpen ? 'rotate-180 text-[#0A84FF]' : ''}`}>
+                              <ChevronDown size={14} />
+                            </div>
+                          </button>
+                          
+                          {isFaqOpen && (
+                            <motion.div
+                              initial={{ height: 0, opacity: 0 }}
+                              animate={{ height: 'auto', opacity: 1 }}
+                              exit={{ height: 0, opacity: 0 }}
+                              transition={{ duration: 0.3 }}
+                              className="overflow-hidden"
+                            >
+                              <div className="p-5 pt-0 border-t border-white/5 text-xs sm:text-sm text-gray-400 leading-relaxed font-medium">
+                                {faq.answer[lang] || faq.answer['ar']}
+                              </div>
+                            </motion.div>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
 
               {/* Dynamic Video Gallery Section */}
               <VideoGallery lang={lang} />
@@ -1041,6 +1537,77 @@ ${currentTime}`;
                       </motion.div>
                     ))}
                   </div>
+
+                  {/* SPECIAL MAINTENANCE SUB-SECTIONS (REMOTE BOOKING & SPARE PARTS SHOWROOM) */}
+                  {currentDept.id === 'maintenance' && (
+                    <div className="max-w-2xl mx-auto w-full mt-10 space-y-8">
+                      {/* Section: Remote Maintenance & Diagnostics */}
+                      <div className="p-6 sm:p-8 bg-gradient-to-br from-blue-950/20 to-black/40 border border-[#0A84FF]/30 rounded-3xl relative overflow-hidden space-y-4">
+                        <div className="absolute top-0 right-0 w-24 h-24 bg-[#0A84FF]/10 rounded-full blur-xl" />
+                        <h3 className="text-lg sm:text-xl font-black text-white flex items-center gap-2">
+                          <Wrench className="w-5 h-5 text-[#0A84FF] animate-bounce" />
+                          <span>{lang === 'ar' ? 'خدمة الصيانة والدعم الفني عن بعد' : 'Remote Maintenance & Live Diagnostics'}</span>
+                        </h3>
+                        <p className="text-xs sm:text-sm text-gray-300 leading-relaxed">
+                          {lang === 'ar' 
+                            ? 'الآن يمكنك حجز جلسة صيانة تفاعلية ومباشرة مع مهندسينا لحل مشاكل ماكينات التطريز وضبط الإعدادات عن بعد.'
+                            : 'Book a live video call or screen session with our expert engineers to diagnose issues, recalibrate, and get technical guidance.'}
+                        </p>
+                        
+                        {/* Interactive Booking Form Component */}
+                        <div className="pt-2">
+                          <MaintenanceBookingForm lang={lang} />
+                        </div>
+                      </div>
+
+                      {/* Section: Spare Parts & Components Gallery Integration */}
+                      <div className="space-y-4">
+                        <div className="flex items-center justify-between border-b border-white/5 pb-2">
+                          <h3 className="text-md sm:text-lg font-black text-white">{lang === 'ar' ? 'قطع الغيار والإكسسوارات المتاحة' : 'Spare Parts & Accessories Inventory'}</h3>
+                          <span className="text-[10px] text-gray-500 font-mono">LIVE STORE</span>
+                        </div>
+                        <p className="text-xs text-gray-400">
+                          {lang === 'ar' 
+                            ? 'معرض تفاعلي لأجود أنواع قطع الغيار الأصلية والملحقات المتوفرة لدينا لماكينات التطريز.'
+                            : 'An aesthetic interactive display of our genuine, high-grade replacement parts and components.'}
+                        </p>
+
+                        {/* Fetch from portfolio where category === 'maintenance' */}
+                        {(() => {
+                          const parts = (config.portfolio || []).filter(item => item.category === 'maintenance');
+                          if (parts.length === 0) {
+                            return (
+                              <div className="text-center py-8 bg-white/[0.01] border border-white/5 rounded-2xl">
+                                <p className="text-xs text-gray-500">{lang === 'ar' ? 'لا يوجد صور قطع غيار في المعرض حالياً.' : 'No spare parts photos listed.'}</p>
+                              </div>
+                            );
+                          }
+                          return (
+                            <div className="grid grid-cols-2 sm:grid-cols-3 gap-4 text-start">
+                              {parts.map((item, idx) => (
+                                <motion.div
+                                  key={item.id || idx}
+                                  initial={{ opacity: 0, scale: 0.95 }}
+                                  whileInView={{ opacity: 1, scale: 1 }}
+                                  viewport={{ once: true }}
+                                  whileHover={{ y: -3 }}
+                                  className="group relative rounded-2xl overflow-hidden border border-white/10 bg-neutral-900 aspect-square cursor-pointer"
+                                  onClick={() => handleServiceClick('quote')}
+                                >
+                                  <img src={item.url} alt={item.title[lang]} className="w-full h-full object-cover group-hover:scale-105 transition-all duration-500" referrerPolicy="no-referrer" />
+                                  <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-all p-3 flex flex-col justify-end">
+                                    <p className="text-xs font-bold text-white truncate">{item.title[lang]}</p>
+                                    <p className="text-[9px] text-[#0A84FF] font-bold mt-0.5">{lang === 'ar' ? 'اضغط لطلب القطعة' : 'Inquire component'}</p>
+                                  </div>
+                                </motion.div>
+                              ))}
+                            </div>
+                          );
+                        })()}
+                      </div>
+
+                    </div>
+                  )}
 
                   {/* Back button at bottom for easier thumb reach */}
                   <div className="text-center mt-12">
@@ -1501,13 +2068,35 @@ ${currentTime}`;
             <div className="text-xs text-gray-400 flex flex-col gap-2 items-center md:items-start">
               <span>{lang === 'ar' ? `الهاتف: ${SETTINGS.phone}` : `Phone: ${SETTINGS.phone}`}</span>
               <span>{lang === 'ar' ? `الواتساب: ${SETTINGS.whatsapp}` : `WhatsApp: ${SETTINGS.whatsapp}`}</span>
-              <div className="flex gap-3 items-center mt-2">
+              <div className="flex flex-wrap gap-3 items-center mt-2 justify-center md:justify-start">
                 <a href={`https://wa.me/${SETTINGS.whatsapp}`} className="hover:text-[#25D366] text-lg transition-colors" title="WhatsApp" target="_blank" rel="noopener noreferrer"><i className="fa-brands fa-whatsapp"></i></a>
                 <a href={`tel:${SETTINGS.phone}`} className="hover:text-[#0A84FF] text-lg transition-colors" title="Phone Call"><i className="fa-solid fa-phone"></i></a>
-                {SETTINGS.social?.facebook && <a href={SETTINGS.social.facebook} target="_blank" rel="noopener noreferrer" className="hover:text-[#1877F2] text-lg transition-colors" title="Facebook"><i className="fa-brands fa-facebook"></i></a>}
-                {SETTINGS.social?.instagram && <a href={SETTINGS.social.instagram} target="_blank" rel="noopener noreferrer" className="hover:text-[#E4405F] text-lg transition-colors" title="Instagram"><i className="fa-brands fa-instagram"></i></a>}
-                {SETTINGS.social?.tiktok && <a href={SETTINGS.social.tiktok} target="_blank" rel="noopener noreferrer" className="hover:text-white text-lg transition-colors" title="TikTok"><i className="fa-brands fa-tiktok"></i></a>}
-                {SETTINGS.social?.youtube && <a href={SETTINGS.social.youtube} target="_blank" rel="noopener noreferrer" className="hover:text-[#FF0000] text-lg transition-colors" title="YouTube"><i className="fa-brands fa-youtube"></i></a>}
+                {(config.settings.socialLinks || []).filter(sl => sl.active && sl.url).map(sl => {
+                  let faClass = `fa-brands fa-${sl.platform}`;
+                  let colorClass = "hover:text-[#0A84FF]";
+                  if (sl.platform === 'facebook') colorClass = "hover:text-[#1877F2]";
+                  else if (sl.platform === 'instagram') colorClass = "hover:text-[#E4405F]";
+                  else if (sl.platform === 'tiktok') colorClass = "hover:text-white";
+                  else if (sl.platform === 'youtube') colorClass = "hover:text-[#FF0000]";
+                  else if (sl.platform === 'snapchat') { faClass = "fa-brands fa-snapchat"; colorClass = "hover:text-[#FFFC00]"; }
+                  else if (sl.platform === 'x') { faClass = "fa-brands fa-x-twitter"; colorClass = "hover:text-white"; }
+                  else if (sl.platform === 'telegram') { faClass = "fa-brands fa-telegram"; colorClass = "hover:text-[#0088cc]"; }
+                  else if (sl.platform === 'linkedin') { faClass = "fa-brands fa-linkedin"; colorClass = "hover:text-[#0a66c2]"; }
+                  else if (sl.platform === 'whatsapp') { faClass = "fa-brands fa-whatsapp"; colorClass = "hover:text-[#25D366]"; }
+                  
+                  return (
+                    <a
+                      key={sl.id}
+                      href={sl.url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className={`text-lg transition-colors ${colorClass}`}
+                      title={sl.platform}
+                    >
+                      <i className={faClass}></i>
+                    </a>
+                  );
+                })}
               </div>
             </div>
           </div>

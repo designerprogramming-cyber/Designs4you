@@ -14,6 +14,48 @@ export interface PriceSettings {
   course: { ar: string; en: string };
 }
 
+export interface SocialLinkItem {
+  id: string;
+  platform: string;
+  url: string;
+  active: boolean;
+}
+
+export interface BannerSlide {
+  id: string;
+  title: { ar: string; en: string };
+  desc: { ar: string; en: string };
+  btnText: { ar: string; en: string };
+  btnLink: string;
+  mediaType: 'image' | 'video';
+  mediaUrl: string;
+  order: number;
+}
+
+export interface PricingItem {
+  id: string;
+  title: { ar: string; en: string };
+  price: string;
+  unit: { ar: string; en: string };
+  icon: string;
+  order: number;
+}
+
+export interface MaintenanceBooking {
+  id?: string;
+  name: string;
+  phone: string;
+  whatsapp: string;
+  email: string;
+  machineType: string;
+  machineModel: string;
+  problemDesc: string;
+  fileUrl?: string;
+  fileName?: string;
+  contactTime: string;
+  createdAt?: string;
+}
+
 export interface AdminSettings {
   company: string;
   whatsapp: string;
@@ -33,6 +75,13 @@ export interface AdminSettings {
   secondaryColor: string;
   defaultLanguage: Language;
   prices: PriceSettings;
+  faviconUrl?: string;
+  announcementSpeed?: number;
+  currency?: {
+    ar: string;
+    en: string;
+  };
+  socialLinks?: SocialLinkItem[];
 }
 
 export interface QuoteForm {
@@ -69,5 +118,49 @@ export interface ServiceItem {
     en: string;
   };
   options: ServiceOption[];
+  imageUrl?: string;
 }
+
+export interface Customer {
+  id?: string;
+  name: string;
+  phone: string;
+  email: string;
+  country: string;
+  ordersCount: number;
+  lastVisit: string;
+  createdAt: string;
+  blocked: boolean;
+}
+
+export interface QuickQuote {
+  id?: string;
+  name: string;
+  phone: string;
+  country: string;
+  region: string;
+  department: string;
+  service: string;
+  notes: string;
+  requestId: string;
+  designFileName?: string;
+  designFileSize?: string;
+  createdAt?: string;
+  status: 'new' | 'review' | 'processing' | 'completed' | 'cancelled';
+}
+
+export interface SEOConfig {
+  metaTitle: string;
+  metaDescription: string;
+  keywords: string;
+  openGraph: string;
+  twitterCards: string;
+  favicon: string;
+  googleVerification: string;
+  facebookVerification: string;
+  robotsTxt: string;
+  sitemapXml: string;
+}
+
+
 
