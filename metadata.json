@@ -1,0 +1,6 @@
+{
+  "name": "Designs4you Service Center",
+  "description": "Premium modern service center for designs, embroidery, DTF, maintenance, and training.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

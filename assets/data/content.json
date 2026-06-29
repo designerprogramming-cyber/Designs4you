@@ -1,0 +1,189 @@
+{
+  "portfolio": [
+    {
+      "id": "embroidery-01",
+      "url": "https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?auto=format&fit=crop&w=800&q=80",
+      "filename": "embroidery-01.jpg",
+      "category": "embroidery",
+      "title": {
+        "ar": "تصميم تطريز هندسي حديث ثلاثي الأبعاد",
+        "en": "Modern Geometric 3D Embroidery Design"
+      }
+    },
+    {
+      "id": "dtf-01",
+      "url": "https://images.unsplash.com/photo-1513364776144-60967b0f800f?auto=format&fit=crop&w=800&q=80",
+      "filename": "dtf-01.png",
+      "category": "dtf",
+      "title": {
+        "ar": "طباعة تيشيرت DTF فنية بالألوان الحيوية والفسفورية",
+        "en": "Vibrant Neon Art DTF Garment Print"
+      }
+    },
+    {
+      "id": "logo-01",
+      "url": "https://images.unsplash.com/photo-1626785774573-4b799315345d?auto=format&fit=crop&w=800&q=80",
+      "filename": "logo-01.webp",
+      "category": "logo",
+      "title": {
+        "ar": "تصميم لوجو وهوية بصرية متكاملة لخطوط الملابس",
+        "en": "Apparel Line Branding & Logo Visual"
+      }
+    },
+    {
+      "id": "maintenance-01",
+      "url": "https://images.unsplash.com/photo-1581092160607-ee22621dd758?auto=format&fit=crop&w=800&q=80",
+      "filename": "maintenance-01.jpg",
+      "category": "maintenance",
+      "title": {
+        "ar": "معايرة ميكانيكية دقيقة لرأس ماكينة تطريز صناعية",
+        "en": "Industrial Embroidery Head Mechanical Calibration"
+      }
+    },
+    {
+      "id": "course-01",
+      "url": "https://images.unsplash.com/photo-1516321318423-f06f85e504b3?auto=format&fit=crop&w=800&q=80",
+      "filename": "course-01.jpg",
+      "category": "course",
+      "title": {
+        "ar": "كورس ويلكوم Wilcom الاحترافي المتكامل لتصميم التطريز",
+        "en": "Intensive Professional Wilcom Embroidery Design Course"
+      }
+    },
+    {
+      "id": "embroidery-02",
+      "url": "https://images.unsplash.com/photo-1578301978693-85fa9c0320b9?auto=format&fit=crop&w=800&q=80",
+      "filename": "embroidery-02.jpg",
+      "category": "embroidery",
+      "title": {
+        "ar": "تطريز تراثي فخم دقيق ومجرب بخيوط ذهبية",
+        "en": "Heritage Golden Thread Luxury Embroidery Stitch"
+      }
+    },
+    {
+      "id": "dtf-02",
+      "url": "https://images.unsplash.com/photo-1579783900882-c0d3dad7b119?auto=format&fit=crop&w=800&q=80",
+      "filename": "dtf-02.png",
+      "category": "dtf",
+      "title": {
+        "ar": "طباعة DTF حرارية مخصصة للمنسوجات والأطقم الرياضية",
+        "en": "Custom DTF Heat Transfer for Sportswear"
+      }
+    },
+    {
+      "id": "maintenance-02",
+      "url": "https://images.unsplash.com/photo-1537462715879-360eeb61a0bc?auto=format&fit=crop&w=800&q=80",
+      "filename": "maintenance-02.jpg",
+      "category": "maintenance",
+      "title": {
+        "ar": "تجديد وتركيب قطع غيار ميكانيكية دقيقة للماكينات",
+        "en": "Embroidery Machine Precision Overhaul"
+      }
+    }
+  ],
+  "videos": [
+    {
+      "id": "vid-01",
+      "url": "https://assets.mixkit.co/videos/preview/mixkit-sewing-machine-stitching-a-fabric-close-up-41584-large.mp4",
+      "title": {
+        "ar": "شرح عملي: حركة إبرة التطريز ومعايرة الغرز المزدوجة التلقائية",
+        "en": "Technical: Embroidery Needle Action & Double Stitch Calibration"
+      },
+      "duration": "0:45",
+      "thumbnail": "https://images.unsplash.com/photo-1513364776144-60967b0f800f?auto=format&fit=crop&w=800&q=80"
+    },
+    {
+      "id": "vid-02",
+      "url": "https://assets.mixkit.co/videos/preview/mixkit-computer-screens-with-graphics-programs-close-up-34289-large.mp4",
+      "title": {
+        "ar": "مقدمة عملية في برنامج Wilcom وكيفية رسم وتخطيط المتجهات المعقدة",
+        "en": "Introduction to Wilcom & Mapping Complex Vector Layouts"
+      },
+      "duration": "1:12",
+      "thumbnail": "https://images.unsplash.com/photo-1516321318423-f06f85e504b3?auto=format&fit=crop&w=800&q=80"
+    },
+    {
+      "id": "vid-03",
+      "url": "https://assets.mixkit.co/videos/preview/mixkit-worker-handling-metal-parts-in-a-workshop-41604-large.mp4",
+      "title": {
+        "ar": "فيديو صيانة: فحص رؤوس ماكينات التطريز وتزييت التروس بشكل دوري",
+        "en": "Mechanical Guide: Maintaining Embroidery Heads & Gear Lubrication"
+      },
+      "duration": "0:58",
+      "thumbnail": "https://images.unsplash.com/photo-1581092160607-ee22621dd758?auto=format&fit=crop&w=800&q=80"
+    }
+  ],
+  "reviews": [
+    {
+      "id": "rev-01",
+      "name": "م. أحمد الشاذلي",
+      "country": "EG",
+      "rating": 5,
+      "comment": {
+        "ar": "تعاملت مع مركز Designs4you في صيانة الماكينات وشراء التصاميم. دقة متناهية وسرعة مذهلة تفوق التوقعات.",
+        "en": "I worked with Designs4you for machine repairs and custom design templates. Unmatched precision and turnaround speed."
+      },
+      "image": "https://images.unsplash.com/photo-1500648767791-00dcc994a43e?auto=format&fit=crop&w=150&h=150&q=80"
+    },
+    {
+      "id": "rev-02",
+      "name": "أ/ سارة المهدي",
+      "country": "SA",
+      "rating": 5,
+      "comment": {
+        "ar": "الكورس التدريبي لبرنامج ويلكوم كان رائعاً وشاملاً لكل التفاصيل المتقدمة، والآن أعمل بشكل مستقل كلياً.",
+        "en": "The Wilcom masterclass was absolutely transformative. I am now creating professional embroidery patterns and freelancing."
+      },
+      "image": "https://images.unsplash.com/photo-1494790108377-be9c29b29330?auto=format&fit=crop&w=150&h=150&q=80"
+    },
+    {
+      "id": "rev-03",
+      "name": "أ/ محمد الدوسري",
+      "country": "AE",
+      "rating": 5,
+      "comment": {
+        "ar": "سرعة استجابة مذهلة لطلبات تصاميم DTF. دقة المخرجات والطباعة والألوان زاهية وجميلة وثابتة جداً.",
+        "en": "Extraordinary customer support and amazing DTF transfers. Colors are brilliant, durable and highly vibrant."
+      },
+      "image": "https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?auto=format&fit=crop&w=150&h=150&q=80"
+    }
+  ],
+  "estimatedPrices": [
+    {
+      "id": "pr-embroidery",
+      "title": {
+        "ar": "قسم تصميم التطريز",
+        "en": "Embroidery Design Department"
+      },
+      "priceKey": "embroidery"
+    },
+    {
+      "id": "pr-dtf",
+      "title": {
+        "ar": "قسم تصميم وطباعة DTF",
+        "en": "DTF Design & Printing"
+      },
+      "priceKey": "dtf"
+    },
+    {
+      "id": "pr-maintenance",
+      "title": {
+        "ar": "قسم الصيانة والدعم الفني",
+        "en": "Technical Maintenance & Support"
+      },
+      "priceKey": "maintenance"
+    },
+    {
+      "id": "pr-course",
+      "title": {
+        "ar": "كورس Wilcom وتصميم التطريز",
+        "en": "Wilcom & Embroidery Course"
+      },
+      "priceKey": "course"
+    }
+  ],
+  "futureContent": {
+    "announcements": [],
+    "faq": []
+  }
+}
