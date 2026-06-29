@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
+import { useLocation, useNavigate, Routes, Route, Navigate } from 'react-router-dom';
 import { 
   Palette, 
   Wrench, 
@@ -36,9 +37,10 @@ import AnnouncementBar from './components/AnnouncementBar';
 import PortfolioGallery from './components/PortfolioGallery';
 import VideoGallery from './components/VideoGallery';
 import AdminDashboard from './components/AdminDashboard';
-import { Star, ShieldCheck, Clock, Award, Users, ThumbsUp, Video as VideoIcon } from 'lucide-react';
+import { Star, ShieldCheck, Clock, Award, Users, ThumbsUp, Video as VideoIcon, Volume2, VolumeX } from 'lucide-react';
 import { stateStore, addMaintenanceBooking, uploadFile, addQuickQuote } from './lib/stateStore';
 import contentData from '../assets/data/content.json';
+import { useCurrency } from './lib/currency';
 
 interface BannerCarouselProps {
   banners: any[];
@@ -352,12 +354,233 @@ export default function App() {
     reviews: config.reviews
   };
 
+  const { convertPrice } = useCurrency(SETTINGS.enableAutoCurrency);
+
+  // ==========================================================
+  // BACKGROUND MUSIC ENGINE
+  // ==========================================================
+  const [isMusicMuted, setIsMusicMuted] = useState<boolean>(() => {
+    const saved = localStorage.getItem('designs4you_music_pref');
+    if (saved) return saved === 'OFF';
+    return false; // Default is ON (unmuted), but waits for first visitor interaction
+  });
+
+  const [selectedTrack, setSelectedTrack] = useState<any | null>(null);
+  const selectedTrackRef = useRef<any | null>(null);
+  const audioRef = useRef<HTMLAudioElement | null>(null);
+  const hasInteractedRef = useRef<boolean>(false);
+  const fadeIntervalRef = useRef<any>(null);
+
+  // Fade utility
+  const fadeAudio = (targetVolume: number, durationMs: number, onComplete?: () => void) => {
+    if (!audioRef.current) return;
+    if (fadeIntervalRef.current) {
+      clearInterval(fadeIntervalRef.current);
+    }
+
+    const startVolume = audioRef.current.volume;
+    const difference = targetVolume - startVolume;
+    const stepTimeMs = 50;
+    const steps = durationMs / stepTimeMs;
+    const volumeStep = difference / steps;
+    let currentStep = 0;
+
+    fadeIntervalRef.current = setInterval(() => {
+      if (!audioRef.current) {
+        clearInterval(fadeIntervalRef.current);
+        return;
+      }
+      currentStep++;
+      let newVolume = startVolume + (volumeStep * currentStep);
+      
+      if (newVolume < 0) newVolume = 0;
+      if (newVolume > 1) newVolume = 1;
+      
+      audioRef.current.volume = newVolume;
+
+      if (currentStep >= steps) {
+        audioRef.current.volume = targetVolume;
+        clearInterval(fadeIntervalRef.current);
+        fadeIntervalRef.current = null;
+        if (onComplete) onComplete();
+      }
+    }, stepTimeMs);
+  };
+
+  // Select a random track on first load
+  useEffect(() => {
+    if (config.musicTracks && config.musicTracks.length > 0 && !selectedTrackRef.current) {
+      const randomIndex = Math.floor(Math.random() * config.musicTracks.length);
+      const track = config.musicTracks[randomIndex];
+      setSelectedTrack(track);
+      selectedTrackRef.current = track;
+    }
+  }, [config.musicTracks]);
+
+  // Start playback logic
+  const startPlayback = () => {
+    if (!selectedTrackRef.current) return;
+    
+    try {
+      if (!audioRef.current) {
+        audioRef.current = new Audio(selectedTrackRef.current.url);
+        audioRef.current.loop = true;
+        audioRef.current.volume = 0;
+      } else if (audioRef.current.src !== selectedTrackRef.current.url) {
+        audioRef.current.pause();
+        audioRef.current = new Audio(selectedTrackRef.current.url);
+        audioRef.current.loop = true;
+        audioRef.current.volume = 0;
+      }
+
+      audioRef.current.play()
+        .then(() => {
+          const targetVol = (config.settings.defaultVolume ?? 20) / 100;
+          fadeAudio(targetVol, 2000);
+        })
+        .catch(err => {
+          console.error('Playback failed:', err);
+        });
+    } catch (err) {
+      console.error('Error starting playback:', err);
+    }
+  };
+
+  // Interaction trigger
+  const initAndPlayAudio = () => {
+    if (hasInteractedRef.current) return;
+    hasInteractedRef.current = true;
+
+    window.removeEventListener('click', initAndPlayAudio);
+    window.removeEventListener('touchstart', initAndPlayAudio);
+    window.removeEventListener('scroll', initAndPlayAudio);
+    window.removeEventListener('keydown', initAndPlayAudio);
+
+    if (config.settings.enableMusic && selectedTrackRef.current && !isMusicMuted) {
+      startPlayback();
+    }
+  };
+
+  useEffect(() => {
+    window.addEventListener('click', initAndPlayAudio);
+    window.addEventListener('touchstart', initAndPlayAudio);
+    window.addEventListener('scroll', initAndPlayAudio);
+    window.addEventListener('keydown', initAndPlayAudio);
+
+    return () => {
+      window.removeEventListener('click', initAndPlayAudio);
+      window.removeEventListener('touchstart', initAndPlayAudio);
+      window.removeEventListener('scroll', initAndPlayAudio);
+      window.removeEventListener('keydown', initAndPlayAudio);
+    };
+  }, [config.settings.enableMusic, selectedTrack, isMusicMuted]);
+
+  // React to admin toggling global music enable setting
+  useEffect(() => {
+    if (!config.settings.enableMusic) {
+      if (audioRef.current && !audioRef.current.paused) {
+        fadeAudio(0, 2000, () => {
+          if (audioRef.current) {
+            audioRef.current.pause();
+          }
+        });
+      }
+    } else if (config.settings.enableMusic && hasInteractedRef.current && !isMusicMuted && selectedTrack) {
+      startPlayback();
+    }
+  }, [config.settings.enableMusic, selectedTrack]);
+
+  // React to volume changes
+  useEffect(() => {
+    if (audioRef.current && !isMusicMuted && !fadeIntervalRef.current) {
+      audioRef.current.volume = (config.settings.defaultVolume ?? 20) / 100;
+    }
+  }, [config.settings.defaultVolume, isMusicMuted]);
+
+  // Handle Mute Button toggle in header
+  const toggleMusicPlayPreference = () => {
+    const nextMuted = !isMusicMuted;
+    setIsMusicMuted(nextMuted);
+    localStorage.setItem('designs4you_music_pref', nextMuted ? 'OFF' : 'ON');
+
+    if (nextMuted) {
+      if (audioRef.current && !audioRef.current.paused) {
+        fadeAudio(0, 2000, () => {
+          if (audioRef.current) {
+            audioRef.current.pause();
+          }
+        });
+      }
+    } else {
+      if (config.settings.enableMusic && selectedTrackRef.current) {
+        startPlayback();
+      }
+    }
+  };
+
+  // Cleanup effect
+  useEffect(() => {
+    return () => {
+      if (audioRef.current) {
+        audioRef.current.pause();
+        audioRef.current = null;
+      }
+      if (fadeIntervalRef.current) {
+        clearInterval(fadeIntervalRef.current);
+      }
+    };
+  }, []);
+
+  const showMusicButton = !!(config.settings.enableMusic && config.musicTracks && config.musicTracks.length > 0);
+
+  // Dynamically update Site Identity in the browser document head
+  useEffect(() => {
+    // 1. Browser Title
+    document.title = SETTINGS.browserTitle || SETTINGS.company || "Designs4you";
+
+    // 2. Favicon
+    if (SETTINGS.faviconUrl) {
+      let link: HTMLLinkElement | null = document.querySelector("link[rel~='icon']");
+      if (!link) {
+        link = document.createElement('link');
+        link.rel = 'icon';
+        document.getElementsByTagName('head')[0].appendChild(link);
+      }
+      link.href = SETTINGS.faviconUrl;
+    }
+
+    // 3. Meta Description
+    if (SETTINGS.metaDescription) {
+      let meta: HTMLMetaElement | null = document.querySelector("meta[name='description']");
+      if (!meta) {
+        meta = document.createElement('meta');
+        meta.name = 'description';
+        document.getElementsByTagName('head')[0].appendChild(meta);
+      }
+      meta.content = SETTINGS.metaDescription;
+    }
+
+    // 4. SEO Keywords
+    if (SETTINGS.seoKeywords) {
+      let meta: HTMLMetaElement | null = document.querySelector("meta[name='keywords']");
+      if (!meta) {
+        meta = document.createElement('meta');
+        meta.name = 'keywords';
+        document.getElementsByTagName('head')[0].appendChild(meta);
+      }
+      meta.content = SETTINGS.seoKeywords;
+    }
+  }, [SETTINGS.browserTitle, SETTINGS.company, SETTINGS.faviconUrl, SETTINGS.metaDescription, SETTINGS.seoKeywords]);
+
   // Language State (retrieved from LocalStorage or settings default)
   const [lang, setLang] = useState<Language>(() => {
     const saved = localStorage.getItem('designs4you_lang');
     if (saved === 'ar' || saved === 'en') return saved;
     return SETTINGS.defaultLanguage;
   });
+
+  const location = useLocation();
+  const navigate = useNavigate();
 
   // Active Navigation View state: 'home', 'design', 'maintenance', 'courses', 'dtf', 'quote', 'admin'
   const [activeView, setActiveView] = useState<string>(() => {
@@ -368,21 +591,32 @@ export default function App() {
     return 'home';
   });
 
-  // Sync hash/pathname changes
+  // Sync route path to activeView state
   useEffect(() => {
-    const handleUrlChange = () => {
-      const hash = window.location.hash || '';
-      if (window.location.pathname === '/admin' || hash === '#/admin' || hash === '#admin') {
+    const hash = window.location.hash || '';
+    if (location.pathname === '/admin' || hash === '#/admin' || hash === '#admin') {
+      if (activeView !== 'admin') {
         setActiveView('admin');
       }
-    };
-    window.addEventListener('hashchange', handleUrlChange);
-    window.addEventListener('popstate', handleUrlChange);
-    return () => {
-      window.removeEventListener('hashchange', handleUrlChange);
-      window.removeEventListener('popstate', handleUrlChange);
-    };
-  }, []);
+    } else if (location.pathname === '/') {
+      if (activeView === 'admin') {
+        setActiveView('home');
+      }
+    }
+  }, [location.pathname, activeView]);
+
+  // Sync activeView state to route path
+  useEffect(() => {
+    if (activeView === 'admin') {
+      if (location.pathname !== '/admin') {
+        navigate('/admin');
+      }
+    } else {
+      if (location.pathname !== '/') {
+        navigate('/');
+      }
+    }
+  }, [activeView, location.pathname, navigate]);
 
   // FAQ accordion state
   const [openFaqIndex, setOpenFaqIndex] = useState<number | null>(null);
@@ -917,23 +1151,57 @@ ${currentTime}`;
           </div>
         </div>
 
-        {/* Translation Switcher - Top Right */}
-        <motion.button
-          whileHover={{ scale: 1.05 }}
-          whileTap={{ scale: 0.95 }}
-          onClick={handleLanguageToggle}
-          className="relative inline-flex items-center gap-2 px-4 py-2 rounded-full border border-white/10 bg-white/5 text-xs font-semibold text-white backdrop-blur-md hover:bg-white/10 transition-all cursor-pointer shadow-md"
-          title={lang === 'ar' ? "Switch to English" : "تغيير للغة العربية"}
-        >
-          <Globe size={14} className="text-[#0A84FF]" />
-          <span>{lang === 'ar' ? "English" : "العربية"}</span>
-          <span className="text-sm">{lang === 'ar' ? "🇺🇸" : "🇪🇬"}</span>
-        </motion.button>
+        {/* Action Group - Top Right */}
+        <div className="flex items-center gap-2.5">
+          {/* Background Music Button */}
+          {showMusicButton && (
+            <motion.button
+              whileHover={{ scale: 1.05 }}
+              whileTap={{ scale: 0.95 }}
+              onClick={toggleMusicPlayPreference}
+              className="relative inline-flex items-center justify-center w-9 h-9 rounded-full border border-white/10 bg-white/5 text-xs text-white backdrop-blur-md hover:bg-white/10 transition-all cursor-pointer shadow-md"
+              title={isMusicMuted ? (lang === 'ar' ? "تشغيل الموسيقى" : "Play Music") : (lang === 'ar' ? "كتم الموسيقى" : "Mute Music")}
+            >
+              {isMusicMuted ? (
+                <VolumeX size={15} className="text-gray-400" />
+              ) : (
+                <Volume2 size={15} className="text-[#0A84FF] animate-pulse" />
+              )}
+            </motion.button>
+          )}
+
+          {/* Translation Switcher */}
+          <motion.button
+            whileHover={{ scale: 1.05 }}
+            whileTap={{ scale: 0.95 }}
+            onClick={handleLanguageToggle}
+            className="relative inline-flex items-center gap-2 px-4 py-2 rounded-full border border-white/10 bg-white/5 text-xs font-semibold text-white backdrop-blur-md hover:bg-white/10 transition-all cursor-pointer shadow-md"
+            title={lang === 'ar' ? "Switch to English" : "تغيير للغة العربية"}
+          >
+            <Globe size={14} className="text-[#0A84FF]" />
+            <span>{lang === 'ar' ? "English" : "العربية"}</span>
+            <span className="text-sm">{lang === 'ar' ? "🇺🇸" : "🇪🇬"}</span>
+          </motion.button>
+        </div>
       </header>
 
       {/* Main Content Stage */}
       <main className="flex-1 flex flex-col z-10 w-full max-w-7xl mx-auto px-4 py-8 md:py-12">
-        <AnimatePresence mode="wait">
+        <Routes>
+          <Route path="/admin" element={
+            <motion.section
+              key="admin"
+              initial={{ opacity: 0, y: 15 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -15 }}
+              transition={{ duration: 0.4 }}
+              className="flex-1"
+            >
+              <AdminDashboard lang={lang} />
+            </motion.section>
+          } />
+          <Route path="*" element={
+            <AnimatePresence mode="wait">
           
           {/* --- VIEW: HOME --- */}
           {activeView === 'home' && (
@@ -1056,30 +1324,33 @@ ${currentTime}`;
                 </div>
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-6">
-                  {(config.pricingList || []).map((card, idx) => (
-                    <motion.div
-                      key={card.id}
-                      initial={{ opacity: 0, y: 20 }}
-                      whileInView={{ opacity: 1, y: 0 }}
-                      viewport={{ once: true }}
-                      transition={{ delay: 0.05 * idx }}
-                      whileHover={{ y: -4 }}
-                      className="p-6 rounded-2xl border border-white/10 bg-white/[0.01] hover:border-[#0A84FF]/30 transition-all text-center flex flex-col justify-between"
-                    >
-                      <div>
-                        <div className="w-12 h-12 rounded-xl bg-[#0A84FF]/10 border border-[#0A84FF]/20 flex items-center justify-center text-[#0A84FF] mx-auto mb-4">
-                          {renderIcon(card.icon, "w-5 h-5")}
+                  {(config.pricingList || []).map((card, idx) => {
+                    const converted = convertPrice(card.price);
+                    return (
+                      <motion.div
+                        key={card.id}
+                        initial={{ opacity: 0, y: 20 }}
+                        whileInView={{ opacity: 1, y: 0 }}
+                        viewport={{ once: true }}
+                        transition={{ delay: 0.05 * idx }}
+                        whileHover={{ y: -4 }}
+                        className="p-6 rounded-2xl border border-white/10 bg-white/[0.01] hover:border-[#0A84FF]/30 transition-all text-center flex flex-col justify-between"
+                      >
+                        <div>
+                          <div className="w-12 h-12 rounded-xl bg-[#0A84FF]/10 border border-[#0A84FF]/20 flex items-center justify-center text-[#0A84FF] mx-auto mb-4">
+                            {renderIcon(card.icon, "w-5 h-5")}
+                          </div>
+                          <h3 className="text-sm font-bold text-gray-300 mb-2">{card.title[lang]}</h3>
                         </div>
-                        <h3 className="text-sm font-bold text-gray-300 mb-2">{card.title[lang]}</h3>
-                      </div>
-                      <div className="mt-4">
-                        <span className="text-2xl font-black text-white block">
-                          {card.price} <span className="text-xs font-bold text-[#0A84FF]">{config.settings.currency?.[lang] || (lang === 'ar' ? "ج.م" : "EGP")}</span>
-                        </span>
-                        <span className="text-[10px] text-gray-500 block mt-1">{card.unit?.[lang]}</span>
-                      </div>
-                    </motion.div>
-                  ))}
+                        <div className="mt-4">
+                          <span className="text-2xl font-black text-white block">
+                            {converted.amount} <span className="text-xs font-bold text-[#0A84FF]">{converted.symbol[lang]}</span>
+                          </span>
+                          <span className="text-[10px] text-gray-500 block mt-1">{card.unit?.[lang]}</span>
+                        </div>
+                      </motion.div>
+                    );
+                  })}
                 </div>
               </div>
 
@@ -1976,21 +2247,9 @@ ${currentTime}`;
             </motion.section>
           )}
 
-          {/* --- VIEW: ADMIN --- */}
-          {activeView === 'admin' && (
-            <motion.section
-              key="admin"
-              initial={{ opacity: 0, y: 15 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -15 }}
-              transition={{ duration: 0.4 }}
-              className="flex-1"
-            >
-              <AdminDashboard lang={lang} />
-            </motion.section>
-          )}
-
-        </AnimatePresence>
+            </AnimatePresence>
+          } />
+        </Routes>
       </main>
 
       {/* 3. Sticky Action Buttons (Bottom Corners) */}
@@ -2106,7 +2365,7 @@ ${currentTime}`;
         {/* Copyright strip */}
         <div className="border-t border-white/5 py-6 px-6 bg-black/30">
           <div className="max-w-7xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-4 text-xs text-gray-500">
-            <span>{t.footerCopyright}</span>
+            <span>{SETTINGS.copyrightText?.[lang] || t.footerCopyright}</span>
             <div className="flex items-center gap-1.5 text-[10px] text-gray-600">
               <span>{t.footerMadeBy}</span>
               <span className="w-1.5 h-1.5 rounded-full bg-[#0A84FF]" />

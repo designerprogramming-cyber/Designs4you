@@ -135,6 +135,19 @@
         "createdAt": { "type": "string" }
       },
       "required": ["name", "phone", "machineType", "machineModel", "problemDesc", "contactTime"]
+    },
+    "MusicTrack": {
+      "title": "MusicTrack",
+      "description": "A background music track metadata",
+      "type": "object",
+      "properties": {
+        "title": { "type": "string" },
+        "url": { "type": "string" },
+        "filename": { "type": "string" },
+        "createdAt": { "type": "string" },
+        "order": { "type": "integer" }
+      },
+      "required": ["title", "url", "filename"]
     }
   },
   "firestore": {
@@ -177,6 +190,10 @@
     "maintenanceBookings/{bookingId}": {
       "schema": "MaintenanceBooking",
       "description": "Customer requests for maintenance"
+    },
+    "musicTracks/{trackId}": {
+      "schema": "MusicTrack",
+      "description": "Background music tracks"
     }
   }
 }

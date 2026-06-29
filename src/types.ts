@@ -5,6 +5,7 @@ export interface SocialLinks {
   instagram?: string;
   youtube?: string;
   tiktok?: string;
+  linkedin?: string;
 }
 
 export interface PriceSettings {
@@ -58,6 +59,16 @@ export interface MaintenanceBooking {
 
 export interface AdminSettings {
   company: string;
+  websiteName?: string;
+  browserTitle?: string;
+  metaDescription?: string;
+  seoKeywords?: string;
+  copyrightText?: {
+    ar: string;
+    en: string;
+  };
+  logoUrl?: string;
+  enableAutoCurrency?: boolean;
   whatsapp: string;
   phone: string;
   email: string;
@@ -82,6 +93,17 @@ export interface AdminSettings {
     en: string;
   };
   socialLinks?: SocialLinkItem[];
+  enableMusic?: boolean;
+  defaultVolume?: number;
+}
+
+export interface MusicTrack {
+  id: string;
+  title: string;
+  url: string;
+  filename: string;
+  createdAt?: string;
+  order?: number;
 }
 
 export interface QuoteForm {

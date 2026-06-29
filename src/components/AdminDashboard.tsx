@@ -5,7 +5,8 @@ import {
   ArrowLeft, Download, RefreshCw, Check, Upload, Wrench, Smartphone, 
   Eye, Info, HelpCircle, PlusCircle, Loader2, Lock, Mail, LogOut, 
   ChevronDown, ArrowUp, ArrowDown, Globe, PlusSquare, Sparkles, Phone, Megaphone, Bell,
-  Search, Shield, FileText, Database, ShieldAlert, User, CheckSquare, FileSpreadsheet, Ban, CheckCircle, AlertTriangle
+  Search, Shield, FileText, Database, ShieldAlert, User, CheckSquare, FileSpreadsheet, Ban, CheckCircle, AlertTriangle,
+  Volume2, VolumeX, Music, Play, Pause
 } from 'lucide-react';
 import { Language, BannerSlide, PricingItem, MaintenanceBooking, SocialLinkItem, Customer, QuickQuote, SEOConfig } from '../types';
 import { 
@@ -23,8 +24,11 @@ import {
   deleteQuickQuote, 
   updateQuickQuoteStatus, 
   fetchSEOConfig, 
-  saveSEOConfig
+  saveSEOConfig,
+  uploadAudioToStorage,
+  deleteAudioFromStorage
 } from '../lib/stateStore';
+import { MusicTrack } from '../types';
 import { auth, isFirebaseConfigured } from '../lib/firebase';
 import { 
   signInWithEmailAndPassword, 
@@ -43,7 +47,7 @@ interface AdminDashboardProps {
 export default function AdminDashboard({ lang }: AdminDashboardProps) {
   // Config States
   const [config, setConfig] = useState<DynamicAppConfig>(() => stateStore.getConfig());
-  const [activeTab, setActiveTab] = useState<'dashboard' | 'branding' | 'banners' | 'services' | 'prices' | 'portfolio' | 'videos' | 'reviews' | 'social' | 'faqs' | 'announcements' | 'bookings' | 'account' | 'customers' | 'seo' | 'backup'>('dashboard');
+  const [activeTab, setActiveTab] = useState<'dashboard' | 'branding' | 'banners' | 'services' | 'prices' | 'portfolio' | 'videos' | 'reviews' | 'social' | 'faqs' | 'announcements' | 'bookings' | 'account' | 'customers' | 'seo' | 'backup' | 'music'>('dashboard');
   const [toast, setToast] = useState<string | null>(null);
 
   // Authentication States
@@ -135,6 +139,30 @@ export default function AdminDashboard({ lang }: AdminDashboardProps) {
   const [editingReview, setEditingReview] = useState<any | null>(null);
 
   const [newSocial, setNewSocial] = useState({ platform: 'snapchat', url: '', active: true });
+
+  // Background Music States
+  const [uploadingMusic, setUploadingMusic] = useState(false);
+  const [musicTitle, setMusicTitle] = useState('');
+  const [editingTrackId, setEditingTrackId] = useState<string | null>(null);
+  const [editingTrackTitle, setEditingTrackTitle] = useState('');
+  const [previewingTrackId, setPreviewingTrackId] = useState<string | null>(null);
+  const previewAudioRef = useRef<HTMLAudioElement | null>(null);
+
+  useEffect(() => {
+    if (previewAudioRef.current) {
+      previewAudioRef.current.pause();
+      setPreviewingTrackId(null);
+    }
+  }, [activeTab]);
+
+  useEffect(() => {
+    return () => {
+      if (previewAudioRef.current) {
+        previewAudioRef.current.pause();
+        previewAudioRef.current = null;
+      }
+    };
+  }, []);
 
   // Common UI State helpers
   const showToast = (msg: string) => {
@@ -579,6 +607,98 @@ export default function AdminDashboard({ lang }: AdminDashboardProps) {
     );
   }
 
+  // Background Music system helper methods
+  const handleUploadTrack = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    try {
+      setUploadingMusic(true);
+      const downloadUrl = await uploadAudioToStorage(file);
+      const newTrack: MusicTrack = {
+        id: 'track_' + Date.now(),
+        title: musicTitle.trim() || file.name.replace(/\.[^/.]+$/, ""),
+        url: downloadUrl,
+        filename: file.name,
+        createdAt: new Date().toISOString(),
+        order: (config.musicTracks || []).length
+      };
+      
+      const updatedTracks = [...(config.musicTracks || []), newTrack];
+      setConfig(prev => ({
+        ...prev,
+        musicTracks: updatedTracks
+      }));
+      setMusicTitle('');
+      showToast(lang === 'ar' ? 'تم رفع ملف الموسيقى بنجاح!' : 'Music track uploaded successfully!');
+    } catch (err) {
+      console.error(err);
+      alert(lang === 'ar' ? 'فشل رفع الملف الموسيقي.' : 'Failed to upload music file.');
+    } finally {
+      setUploadingMusic(false);
+      e.target.value = '';
+    }
+  };
+
+  const handleDeleteTrack = async (track: MusicTrack) => {
+    if (window.confirm(lang === 'ar' ? 'هل أنت متأكد من حذف هذا المقطع الموسيقي؟' : 'Are you sure you want to delete this music track?')) {
+      try {
+        if (previewingTrackId === track.id) {
+          if (previewAudioRef.current) {
+            previewAudioRef.current.pause();
+          }
+          setPreviewingTrackId(null);
+        }
+        
+        await deleteAudioFromStorage(track.url);
+        
+        const updatedTracks = (config.musicTracks || []).filter(t => t.id !== track.id);
+        setConfig(prev => ({
+          ...prev,
+          musicTracks: updatedTracks
+        }));
+        showToast(lang === 'ar' ? 'تم حذف المقطع الموسيقي!' : 'Music track deleted successfully!');
+      } catch (err) {
+        console.error(err);
+        alert(lang === 'ar' ? 'فشل حذف المقطع الموسيقي.' : 'Failed to delete music track.');
+      }
+    }
+  };
+
+  const handleRenameTrack = (trackId: string, newTitle: string) => {
+    if (!newTitle.trim()) return;
+    const updatedTracks = (config.musicTracks || []).map(t => t.id === trackId ? { ...t, title: newTitle.trim() } : t);
+    setConfig(prev => ({
+      ...prev,
+      musicTracks: updatedTracks
+    }));
+    setEditingTrackId(null);
+    setEditingTrackTitle('');
+    showToast(lang === 'ar' ? 'تم تعديل اسم المقطع الموسيقي!' : 'Music track renamed successfully!');
+  };
+
+  const togglePreviewTrack = (track: MusicTrack) => {
+    if (previewingTrackId === track.id) {
+      if (previewAudioRef.current) {
+        previewAudioRef.current.pause();
+      }
+      setPreviewingTrackId(null);
+    } else {
+      if (previewAudioRef.current) {
+        previewAudioRef.current.pause();
+      }
+      previewAudioRef.current = new Audio(track.url);
+      previewAudioRef.current.volume = (config.settings.defaultVolume ?? 20) / 100;
+      previewAudioRef.current.play().catch(err => {
+        console.error('Failed to play preview:', err);
+      });
+      setPreviewingTrackId(track.id);
+      
+      previewAudioRef.current.onended = () => {
+        setPreviewingTrackId(null);
+      };
+    }
+  };
+
   // Define tabs array
   const TABS = [
     { id: 'dashboard', label: lang === 'ar' ? 'لوحة المتابعة' : 'Overview Dashboard' },
@@ -593,6 +713,7 @@ export default function AdminDashboard({ lang }: AdminDashboardProps) {
     { id: 'videos', label: lang === 'ar' ? 'معرض الفيديوهات' : 'Videos Gallery' },
     { id: 'reviews', label: lang === 'ar' ? 'إدارة التقييمات' : 'Testimonials' },
     { id: 'faqs', label: lang === 'ar' ? 'الأسئلة الشائعة' : 'FAQs' },
+    { id: 'music', label: lang === 'ar' ? 'الموسيقى الخلفية' : 'Background Music' },
     { id: 'account', label: lang === 'ar' ? 'إعدادات الأدمن' : 'Admin Settings' }
   ];
 
@@ -833,12 +954,31 @@ export default function AdminDashboard({ lang }: AdminDashboardProps) {
               
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="space-y-1">
-                  <label className="text-xs text-gray-400 font-bold">{lang === 'ar' ? 'اسم الشركة' : 'Company Name'}</label>
+                  <label className="text-xs text-gray-400 font-bold">{lang === 'ar' ? 'اسم الموقع / الشركة' : 'Website Name / Company'}</label>
                   <input type="text" value={config.settings.company} onChange={e => setConfig(p => ({ ...p, settings: { ...p.settings, company: e.target.value } }))} className="w-full bg-white/5 border border-white/10 rounded-xl p-3 text-xs sm:text-sm text-white" />
                 </div>
                 <div className="space-y-1">
                   <label className="text-xs text-gray-400 font-bold">{lang === 'ar' ? 'البريد الإلكتروني للشركة' : 'Business Email'}</label>
                   <input type="email" value={config.settings.email} onChange={e => setConfig(p => ({ ...p, settings: { ...p.settings, email: e.target.value } }))} className="w-full bg-white/5 border border-white/10 rounded-xl p-3 text-xs sm:text-sm text-white font-mono" />
+                </div>
+
+                <div className="space-y-1">
+                  <label className="text-xs text-gray-400 font-bold">{lang === 'ar' ? 'عنوان المتصفح (Browser Title)' : 'Browser Tab Title'}</label>
+                  <input type="text" value={config.settings.browserTitle || ''} onChange={e => setConfig(p => ({ ...p, settings: { ...p.settings, browserTitle: e.target.value } }))} className="w-full bg-white/5 border border-white/10 rounded-xl p-3 text-xs sm:text-sm text-white" />
+                </div>
+                <div className="space-y-1">
+                  <label className="text-xs text-gray-400 font-bold">{lang === 'ar' ? 'رابط الموقع الإلكتروني' : 'Website URL'}</label>
+                  <input type="text" value={(config.settings as any).websiteUrl || ''} onChange={e => setConfig(p => ({ ...p, settings: { ...p.settings, websiteUrl: e.target.value } as any }))} className="w-full bg-white/5 border border-white/10 rounded-xl p-3 text-xs sm:text-sm text-white font-mono" />
+                </div>
+
+                <div className="space-y-1 md:col-span-2">
+                  <label className="text-xs text-gray-400 font-bold">{lang === 'ar' ? 'وصف الموقع لمحركات البحث (SEO Meta Description)' : 'SEO Meta Description'}</label>
+                  <textarea value={config.settings.metaDescription || ''} onChange={e => setConfig(p => ({ ...p, settings: { ...p.settings, metaDescription: e.target.value } }))} rows={2} className="w-full bg-white/5 border border-white/10 rounded-xl p-3 text-xs sm:text-sm text-white focus:outline-none" />
+                </div>
+
+                <div className="space-y-1 md:col-span-2">
+                  <label className="text-xs text-gray-400 font-bold">{lang === 'ar' ? 'الكلمات المفتاحية لمحركات البحث (SEO Keywords)' : 'SEO Keywords'}</label>
+                  <input type="text" value={config.settings.seoKeywords || ''} onChange={e => setConfig(p => ({ ...p, settings: { ...p.settings, seoKeywords: e.target.value } }))} placeholder="designs4you, wilcom, embroidery" className="w-full bg-white/5 border border-white/10 rounded-xl p-3 text-xs sm:text-sm text-white" />
                 </div>
 
                 <div className="space-y-1">
@@ -869,17 +1009,49 @@ export default function AdminDashboard({ lang }: AdminDashboardProps) {
                 </div>
 
                 <div className="space-y-1">
-                  <label className="text-xs text-gray-400 font-bold">{lang === 'ar' ? 'رابط الموقع الإلكتروني' : 'Website URL'}</label>
-                  <input type="text" value={(config.settings as any).websiteUrl || ''} onChange={e => setConfig(p => ({ ...p, settings: { ...p.settings, websiteUrl: e.target.value } as any }))} className="w-full bg-white/5 border border-white/10 rounded-xl p-3 text-xs sm:text-sm text-white font-mono" />
+                  <label className="text-xs text-gray-400 font-bold">{lang === 'ar' ? 'نص حقوق النشر (العربية)' : 'Copyright Text (Arabic)'}</label>
+                  <input type="text" value={config.settings.copyrightText?.ar || ''} onChange={e => setConfig(p => ({ ...p, settings: { ...p.settings, copyrightText: { ...(p.settings.copyrightText || { ar: '', en: '' }), ar: e.target.value } } }))} className="w-full bg-white/5 border border-white/10 rounded-xl p-3 text-xs sm:text-sm text-white" />
                 </div>
+                <div className="space-y-1">
+                  <label className="text-xs text-gray-400 font-bold">{lang === 'ar' ? 'نص حقوق النشر (الانجليزية)' : 'Copyright Text (English)'}</label>
+                  <input type="text" value={config.settings.copyrightText?.en || ''} onChange={e => setConfig(p => ({ ...p, settings: { ...p.settings, copyrightText: { ...(p.settings.copyrightText || { ar: '', en: '' }), en: e.target.value } } }))} className="w-full bg-white/5 border border-white/10 rounded-xl p-3 text-xs sm:text-sm text-white" />
+                </div>
+
+                <div className="space-y-1">
+                  <label className="text-xs text-gray-400 font-bold">{lang === 'ar' ? 'أوقات العمل (العربية)' : 'Working Hours (Arabic)'}</label>
+                  <input type="text" value={config.settings.workingHours?.ar || ''} onChange={e => setConfig(p => ({ ...p, settings: { ...p.settings, workingHours: { ...(p.settings.workingHours || { ar: '', en: '' }), ar: e.target.value } } }))} className="w-full bg-white/5 border border-white/10 rounded-xl p-3 text-xs sm:text-sm text-white" />
+                </div>
+                <div className="space-y-1">
+                  <label className="text-xs text-gray-400 font-bold">{lang === 'ar' ? 'أوقات العمل (الانجليزية)' : 'Working Hours (English)'}</label>
+                  <input type="text" value={config.settings.workingHours?.en || ''} onChange={e => setConfig(p => ({ ...p, settings: { ...p.settings, workingHours: { ...(p.settings.workingHours || { ar: '', en: '' }), en: e.target.value } } }))} className="w-full bg-white/5 border border-white/10 rounded-xl p-3 text-xs sm:text-sm text-white" />
+                </div>
+
                 <div className="space-y-1">
                   <label className="text-xs text-gray-400 font-bold">{lang === 'ar' ? 'النص أعلى الموقع (العربية)' : 'Top Bar Text (Arabic)'}</label>
                   <input type="text" value={(config.settings as any).topBarText?.ar || ''} onChange={e => setConfig(p => ({ ...p, settings: { ...p.settings, topBarText: { ...((config.settings as any).topBarText || { ar: '', en: '' }), ar: e.target.value } } as any }))} className="w-full bg-white/5 border border-white/10 rounded-xl p-3 text-xs sm:text-sm text-white" />
                 </div>
-                <div className="space-y-1 md:col-span-2">
+                <div className="space-y-1">
                   <label className="text-xs text-gray-400 font-bold">{lang === 'ar' ? 'النص أعلى الموقع (الانجليزية)' : 'Top Bar Text (English)'}</label>
                   <input type="text" value={(config.settings as any).topBarText?.en || ''} onChange={e => setConfig(p => ({ ...p, settings: { ...p.settings, topBarText: { ...((config.settings as any).topBarText || { ar: '', en: '' }), en: e.target.value } } as any }))} className="w-full bg-white/5 border border-white/10 rounded-xl p-3 text-xs sm:text-sm text-white" />
                 </div>
+
+                <div className="space-y-1 md:col-span-2 bg-white/[0.02] border border-white/5 rounded-2xl p-4 mt-2">
+                  <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+                    <div>
+                      <h4 className="text-xs sm:text-sm font-bold text-white">{lang === 'ar' ? 'تحويل العملات التلقائي الذكي' : 'Smart Automatic Currency Conversion'}</h4>
+                      <p className="text-[10px] text-gray-400 mt-1">{lang === 'ar' ? 'تحديد بلد الزائر تلقائياً وتحويل الأسعار من الدولار الأمريكي إلى العملة المحلية مع تحديث أسعار الصرف كل 24 ساعة.' : 'Automatically detect visitor country and convert prices from USD to local currency (SAR, AED, KWD, etc.) updating exchange rates every 24h.'}</p>
+                    </div>
+                    <select 
+                      value={config.settings.enableAutoCurrency === false ? 'false' : 'true'} 
+                      onChange={e => setConfig(p => ({ ...p, settings: { ...p.settings, enableAutoCurrency: e.target.value === 'true' } }))}
+                      className="bg-white/5 border border-white/10 rounded-xl p-2.5 text-xs text-white focus:outline-none min-w-[150px] cursor-pointer"
+                    >
+                      <option value="true" className="bg-neutral-900">{lang === 'ar' ? 'مفعل (نشط)' : 'Enabled (Active)'}</option>
+                      <option value="false" className="bg-neutral-900">{lang === 'ar' ? 'معطل (عرض بالدولار دائمًا)' : 'Disabled (Always USD)'}</option>
+                    </select>
+                  </div>
+                </div>
+
               </div>
 
               {/* Logo / Favicon Upload slots */}
@@ -1060,7 +1232,7 @@ export default function AdminDashboard({ lang }: AdminDashboardProps) {
                   </div>
 
                   <div className="space-y-1">
-                    <label className="text-xs text-gray-400">{lang === 'ar' ? 'قيمة السعر' : 'Price Value'}</label>
+                    <label className="text-xs text-gray-400">{lang === 'ar' ? 'قيمة السعر (بالدولار الأمريكي USD $)' : 'Price Value (in USD $)'}</label>
                     <input type="text" value={priceForm.price || ''} onChange={e => setPriceForm(p => ({ ...p, price: e.target.value }))} placeholder="150" className="w-full bg-white/5 border border-white/10 rounded-xl p-3 text-xs text-white font-mono" />
                   </div>
                   <div className="space-y-1">
@@ -1103,7 +1275,7 @@ export default function AdminDashboard({ lang }: AdminDashboardProps) {
                       <div>
                         <p className="text-xs font-bold text-white">{card.title[lang]}</p>
                         <p className="text-[10px] text-gray-400 font-mono">
-                          {card.price} {config.settings.currency?.[lang]} | {card.unit?.[lang]}
+                          $ {card.price} USD | {card.unit?.[lang]}
                         </p>
                       </div>
                     </div>
@@ -2202,6 +2374,221 @@ export default function AdminDashboard({ lang }: AdminDashboardProps) {
                     <button onClick={() => setConfig(p => ({ ...p, faqs: p.faqs.filter(x => x.id !== faq.id) }))} className="p-1.5 rounded-lg border border-red-500/20 text-red-400 hover:bg-red-500/10 cursor-pointer"><Trash2 size={12} /></button>
                   </div>
                 ))}
+              </div>
+            </div>
+          )}
+
+          {/* PANEL: BACKGROUND MUSIC */}
+          {activeTab === 'music' && (
+            <div className="space-y-6">
+              <h3 className="text-md sm:text-lg font-black text-white border-b border-white/5 pb-2">
+                {lang === 'ar' ? 'الموسيقى الخلفية للموقع' : 'Background Music Directory'}
+              </h3>
+
+              {/* Settings Card */}
+              <div className="bg-white/[0.02] border border-white/5 rounded-2xl p-4 sm:p-5 space-y-5">
+                <h4 className="text-xs text-[#0A84FF] font-bold uppercase tracking-widest">
+                  {lang === 'ar' ? 'إعدادات التشغيل والتحكم' : 'Playback Settings & Control'}
+                </h4>
+                
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  {/* Enable Switch */}
+                  <div className="flex items-center justify-between p-4 bg-white/[0.01] border border-white/5 rounded-xl">
+                    <div className="space-y-1">
+                      <span className="text-xs sm:text-sm font-bold text-white block">
+                        {lang === 'ar' ? 'تفعيل الموسيقى الخلفية' : 'Enable Background Music'}
+                      </span>
+                      <span className="text-[10px] text-gray-500 block">
+                        {lang === 'ar' ? 'تشغيل موسيقى هادئة تلقائياً عند أول تفاعل للزائر' : 'Plays a background track after visitor\'s first interaction'}
+                      </span>
+                    </div>
+                    <label className="relative inline-flex items-center cursor-pointer">
+                      <input 
+                        type="checkbox" 
+                        checked={!!config.settings.enableMusic} 
+                        onChange={(e) => {
+                          const val = e.target.checked;
+                          setConfig(prev => ({
+                            ...prev,
+                            settings: {
+                              ...prev.settings,
+                              enableMusic: val
+                            }
+                          }));
+                        }}
+                        className="sr-only peer" 
+                      />
+                      <div className="w-11 h-6 bg-white/10 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-[#0A84FF]"></div>
+                    </label>
+                  </div>
+
+                  {/* Volume Slider */}
+                  <div className="flex flex-col justify-center p-4 bg-white/[0.01] border border-white/5 rounded-xl space-y-2">
+                    <div className="flex justify-between items-center">
+                      <span className="text-xs sm:text-sm font-bold text-white">
+                        {lang === 'ar' ? 'درجة الصوت الافتراضية' : 'Default Volume'}
+                      </span>
+                      <span className="text-xs font-mono font-bold text-[#0A84FF]">
+                        {config.settings.defaultVolume ?? 20}%
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-3">
+                      <VolumeX size={14} className="text-gray-500" />
+                      <input 
+                        type="range" 
+                        min="0" 
+                        max="100" 
+                        value={config.settings.defaultVolume ?? 20}
+                        onChange={(e) => {
+                          const val = parseInt(e.target.value, 10);
+                          setConfig(prev => ({
+                            ...prev,
+                            settings: {
+                              ...prev.settings,
+                              defaultVolume: val
+                            }
+                          }));
+                          if (previewAudioRef.current) {
+                            previewAudioRef.current.volume = val / 100;
+                          }
+                        }}
+                        className="w-full accent-[#0A84FF] bg-white/10 h-1 rounded-lg appearance-none cursor-pointer" 
+                      />
+                      <Volume2 size={14} className="text-[#0A84FF]" />
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Upload New Track */}
+              <div className="bg-white/[0.02] border border-white/5 rounded-2xl p-4 sm:p-5 space-y-4">
+                <h4 className="text-xs text-[#0A84FF] font-bold uppercase tracking-widest">
+                  {lang === 'ar' ? 'رفع مقطع موسيقي جديد' : 'Upload New Audio Track'}
+                </h4>
+                
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4 items-end">
+                  <div className="space-y-1 md:col-span-2">
+                    <label className="text-xs text-gray-400">
+                      {lang === 'ar' ? 'عنوان المقطع (اختياري)' : 'Track Title (Optional)'}
+                    </label>
+                    <input 
+                      type="text" 
+                      value={musicTitle}
+                      onChange={(e) => setMusicTitle(e.target.value)}
+                      placeholder={lang === 'ar' ? 'أدخل اسم المقطع الموسيقي...' : 'Enter track name...'}
+                      className="w-full bg-white/5 border border-white/10 rounded-xl p-3 text-xs text-white" 
+                    />
+                  </div>
+                  
+                  <div>
+                    <label className="w-full h-11 bg-white/5 border border-white/10 rounded-xl flex items-center justify-center gap-2 text-xs text-white hover:bg-white/10 cursor-pointer transition-all border-dashed">
+                      <Upload size={14} className="text-[#0A84FF]" />
+                      <span>
+                        {uploadingMusic ? (lang === 'ar' ? 'جاري الرفع...' : 'Uploading...') : (lang === 'ar' ? 'اختر ملف MP3/WAV/OGG' : 'Select audio file')}
+                      </span>
+                      <input 
+                        type="file" 
+                        accept="audio/*,.mp3,.wav,.ogg" 
+                        onChange={handleUploadTrack} 
+                        disabled={uploadingMusic}
+                        className="hidden" 
+                      />
+                    </label>
+                  </div>
+                </div>
+              </div>
+
+              {/* Tracks List */}
+              <div className="space-y-3">
+                <h4 className="text-xs text-gray-400 font-bold uppercase tracking-widest">
+                  {lang === 'ar' ? 'المقاطع الموسيقية المرفوعة' : 'Uploaded Tracks'}
+                </h4>
+                
+                {(!config.musicTracks || config.musicTracks.length === 0) ? (
+                  <div className="p-8 text-center bg-white/[0.01] border border-white/5 rounded-2xl space-y-2">
+                    <Music size={24} className="text-gray-600 mx-auto" />
+                    <p className="text-xs text-gray-500">
+                      {lang === 'ar' ? 'لا توجد مقاطع موسيقية حالياً. ارفع مقطعاً موسيقياً بالأعلى لتفعيله.' : 'No music tracks found. Upload your first track above!'}
+                    </p>
+                  </div>
+                ) : (
+                  <div className="space-y-2">
+                    {config.musicTracks.map((track) => (
+                      <div key={track.id} className="flex flex-col sm:flex-row justify-between items-start sm:items-center p-4 bg-white/[0.01] border border-white/5 rounded-xl gap-4 hover:bg-white/[0.02] transition-colors">
+                        <div className="flex items-center gap-3 w-full sm:w-auto">
+                          <button 
+                            type="button"
+                            onClick={() => togglePreviewTrack(track)}
+                            className={`p-2 rounded-full cursor-pointer transition-all ${
+                              previewingTrackId === track.id 
+                                ? 'bg-[#0A84FF] text-white' 
+                                : 'bg-white/5 text-[#0A84FF] hover:bg-white/10'
+                            }`}
+                          >
+                            {previewingTrackId === track.id ? <Pause size={14} /> : <Play size={14} />}
+                          </button>
+                          
+                          <div className="flex-1">
+                            {editingTrackId === track.id ? (
+                              <div className="flex items-center gap-2">
+                                <input 
+                                  type="text" 
+                                  value={editingTrackTitle} 
+                                  onChange={(e) => setEditingTrackTitle(e.target.value)}
+                                  className="bg-white/5 border border-white/20 rounded-lg px-2 py-1 text-xs text-white"
+                                  autoFocus 
+                                />
+                                <button 
+                                  type="button"
+                                  onClick={() => handleRenameTrack(track.id, editingTrackTitle)}
+                                  className="p-1 text-green-400 hover:text-green-300 cursor-pointer"
+                                >
+                                  <Check size={12} />
+                                </button>
+                                <button 
+                                  type="button"
+                                  onClick={() => setEditingTrackId(null)}
+                                  className="p-1 text-red-400 hover:text-red-300 cursor-pointer"
+                                >
+                                  <ArrowLeft size={12} />
+                                </button>
+                              </div>
+                            ) : (
+                              <div>
+                                <p className="text-xs font-bold text-white flex items-center gap-1.5">
+                                  <span>{track.title}</span>
+                                  <button 
+                                    type="button"
+                                    onClick={() => {
+                                      setEditingTrackId(track.id);
+                                      setEditingTrackTitle(track.title);
+                                    }}
+                                    className="p-0.5 text-gray-500 hover:text-white transition-colors cursor-pointer"
+                                    title={lang === 'ar' ? 'تعديل الاسم' : 'Rename Track'}
+                                  >
+                                    <Edit size={10} />
+                                  </button>
+                                </p>
+                                <p className="text-[10px] text-gray-500 font-mono mt-0.5">{track.filename}</p>
+                              </div>
+                            )}
+                          </div>
+                        </div>
+
+                        <div className="flex items-center gap-2 self-end sm:self-auto">
+                          <button 
+                            type="button"
+                            onClick={() => handleDeleteTrack(track)}
+                            className="p-1.5 rounded-lg border border-red-500/10 text-red-400 hover:bg-red-500/10 transition-all cursor-pointer"
+                            title={lang === 'ar' ? 'حذف المقطع' : 'Delete Track'}
+                          >
+                            <Trash2 size={12} />
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
             </div>
           )}

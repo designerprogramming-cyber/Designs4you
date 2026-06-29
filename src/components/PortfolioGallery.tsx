@@ -226,15 +226,7 @@ export default function PortfolioGallery({ lang }: PortfolioGalleryProps) {
           </AnimatePresence>
         </div>
 
-        {/* PWA / Dynamic Addition Status Info indicator */}
-        <div className="mt-12 flex items-center justify-center gap-2 p-4 rounded-xl bg-white/[0.02] border border-white/5 max-w-xl mx-auto text-center">
-          <Info size={14} className="text-[#0A84FF] shrink-0" />
-          <p className="text-[11px] text-gray-500 font-medium">
-            {lang === 'ar' 
-              ? 'تتم مزامنة المعرض تلقائياً مع محتويات المجلد /assets/gallery/ بفضل تقنية Vite glob الذكية.'
-              : 'The gallery is dynamically synced live with /assets/gallery/ directory contents via Vite intelligent globbing.'}
-          </p>
-        </div>
+
 
       </div>
 

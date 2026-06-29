@@ -1,4 +1,4 @@
-import { AdminSettings, ServiceItem, Language, BannerSlide, PricingItem, MaintenanceBooking, SocialLinkItem, Customer, QuickQuote, SEOConfig } from '../types';
+import { AdminSettings, ServiceItem, Language, BannerSlide, PricingItem, MaintenanceBooking, SocialLinkItem, Customer, QuickQuote, SEOConfig, MusicTrack } from '../types';
 import { SETTINGS } from '../settings';
 import { SERVICES_DATA } from '../translations';
 import contentData from '../../assets/data/content.json';
@@ -69,6 +69,7 @@ export interface DynamicAppConfig {
   announcements: AnnouncementItem[];
   banners: BannerSlide[];
   pricingList: PricingItem[];
+  musicTracks?: MusicTrack[];
 }
 
 const STORAGE_KEY = 'designs4you_app_config_db_v3';
@@ -237,6 +238,15 @@ const DEFAULT_SOCIAL_LINKS: SocialLinkItem[] = [
 export const DEFAULT_CONFIG: DynamicAppConfig = {
   settings: {
     ...SETTINGS,
+    websiteName: "Designs4you",
+    browserTitle: "Designs4you Service Center | مركز خدمات التطريز والصيانة",
+    metaDescription: "المركز الاحترافي الأول لخدمات تصميمات التطريز وصيانة الماكينات والتدريب وطباعة الـ DTF",
+    seoKeywords: "designs4you, embroidery design, machine maintenance, dtf printing, wilcom course, صيانة ماكينات تطريز, تصميم ويلكوم",
+    copyrightText: {
+      ar: "جميع الحقوق محفوظة لـ Designs4you © 2026",
+      en: "All rights reserved to Designs4you © 2026"
+    },
+    enableAutoCurrency: true,
     heroTitle: {
       ar: "مرحباً بكم في مركز خدمات Designs4you",
       en: "Welcome to Designs4you Service Center"
@@ -249,7 +259,9 @@ export const DEFAULT_CONFIG: DynamicAppConfig = {
     faviconUrl: "",
     announcementSpeed: 3,
     currency: { ar: "ج.م", en: "EGP" },
-    socialLinks: DEFAULT_SOCIAL_LINKS
+    socialLinks: DEFAULT_SOCIAL_LINKS,
+    enableMusic: true,
+    defaultVolume: 20
   },
   services: SERVICES_DATA,
   portfolio: (contentData.portfolio || []).map((p: any, index: number) => ({ ...p, order: index })),
@@ -258,7 +270,8 @@ export const DEFAULT_CONFIG: DynamicAppConfig = {
   faqs: DEFAULT_FAQS,
   announcements: DEFAULT_ANNOUNCEMENTS,
   banners: DEFAULT_BANNERS,
-  pricingList: DEFAULT_PRICING
+  pricingList: DEFAULT_PRICING,
+  musicTracks: []
 };
 
 // Internal active configuration cache
@@ -279,7 +292,8 @@ const loadLocalConfig = () => {
         faqs: parsed.faqs || DEFAULT_CONFIG.faqs || DEFAULT_FAQS,
         announcements: parsed.announcements || parsed.announcementBanner || DEFAULT_CONFIG.announcements,
         banners: parsed.banners || DEFAULT_CONFIG.banners,
-        pricingList: parsed.pricingList || DEFAULT_CONFIG.pricingList
+        pricingList: parsed.pricingList || DEFAULT_CONFIG.pricingList,
+        musicTracks: parsed.musicTracks || []
       };
     }
   } catch (e) {
@@ -300,6 +314,26 @@ export async function uploadFile(file: File, folder: string): Promise<string> {
     return `/assets/videos/${name}`;
   } else {
     return `/assets/images/${name}`;
+  }
+}
+
+// Actual Firebase Storage helpers for optional Background Music system
+export async function uploadAudioToStorage(file: File): Promise<string> {
+  if (!isFirebaseConfigured || !storage) {
+    throw new Error('Firebase is not configured');
+  }
+  const storageRef = ref(storage, `music/${Date.now()}_${file.name}`);
+  const snapshot = await uploadBytes(storageRef, file);
+  return await getDownloadURL(snapshot.ref);
+}
+
+export async function deleteAudioFromStorage(url: string): Promise<void> {
+  if (!isFirebaseConfigured || !storage) return;
+  try {
+    const storageRef = ref(storage, url);
+    await deleteObject(storageRef);
+  } catch (err) {
+    console.error('Failed to delete audio from Firebase Storage:', err);
   }
 }
 
@@ -745,6 +779,9 @@ if (isFirebaseConfigured && db) {
     // 9. Pricing sync
     syncCollection('pricingList', 'pricingList', DEFAULT_CONFIG.pricingList);
 
+    // 10. Music tracks sync
+    syncCollection('musicTracks', 'musicTracks', []);
+
   } catch (e) {
     console.error('Failed to establish Firebase listeners:', e);
   }
@@ -851,6 +888,19 @@ export const stateStore = {
           batchPL.set(docRef, { ...rest, order: index });
         });
         await batchPL.commit();
+
+        // Save Music Tracks
+        if (config.musicTracks) {
+          const musicSnapshot = await getDocs(collection(db, 'musicTracks'));
+          const batchM = writeBatch(db);
+          musicSnapshot.forEach((doc) => batchM.delete(doc.ref));
+          config.musicTracks.forEach((item, index) => {
+            const docRef = doc(collection(db, 'musicTracks'), item.id);
+            const { id, ...rest } = item;
+            batchM.set(docRef, { ...rest, order: index });
+          });
+          await batchM.commit();
+        }
 
       } catch (error) {
         console.error('Failed to save configuration directly to Firebase:', error);
