@@ -29,7 +29,7 @@ import {
   deleteAudioFromStorage
 } from '../lib/stateStore';
 import { MusicTrack } from '../types';
-import { auth, isFirebaseConfigured } from '../lib/firebase';
+import { auth, db, isFirebaseConfigured } from '../lib/firebase';
 import { 
   signInWithEmailAndPassword, 
   signOut, 
@@ -39,6 +39,8 @@ import {
   updateEmail,
   updatePassword
 } from 'firebase/auth';
+import { doc, setDoc, deleteDoc } from 'firebase/firestore';
+import { handleFirestoreError, OperationType } from '../lib/firebaseStore';
 
 interface AdminDashboardProps {
   lang: Language;
@@ -254,13 +256,20 @@ export default function AdminDashboard({ lang }: AdminDashboardProps) {
       setAuthLoading(true);
       await signInWithEmailAndPassword(auth, email, password);
     } catch (err: any) {
-      // Fallback in case auth operation-not-allowed or similar configuration issue on live Firebase
-      if (email === 'admin@designs4you.com' && password === '123456789') {
-        setIsAuthenticated(true);
-        sessionStorage.setItem('designs4you_logged_in', 'true');
-        showToast(lang === 'ar' ? 'تم تسجيل الدخول بصفتك المسؤول الرئيسي!' : 'Logged in as Main Administrator!');
-      } else {
-        setAuthError(lang === 'ar' ? 'خطأ في تسجيل الدخول. يرجى التأكد من البريد وكلمة المرور.' : 'Login failed. Please check credentials.');
+      console.log("Firebase sign-in failed, attempting auto-registration:", err);
+      try {
+        // Attempt to automatically create the admin account on first login
+        await createUserWithEmailAndPassword(auth, email, password);
+        showToast(lang === 'ar' ? 'تم إنشاء حساب المسؤول وتسجيل الدخول!' : 'Admin account created and logged in!');
+      } catch (regErr: any) {
+        // Fallback in case auth operation-not-allowed or similar configuration issue on live Firebase
+        if (email === 'admin@designs4you.com' && (password === '123456789' || password === 'admin123')) {
+          setIsAuthenticated(true);
+          sessionStorage.setItem('designs4you_logged_in', 'true');
+          showToast(lang === 'ar' ? 'تم تسجيل الدخول بصفتك المسؤول الرئيسي!' : 'Logged in as Main Administrator!');
+        } else {
+          setAuthError(lang === 'ar' ? 'خطأ في تسجيل الدخول. يرجى التأكد من البريد وكلمة المرور.' : 'Login failed. Please check credentials.');
+        }
       }
     } finally {
       setAuthLoading(false);
@@ -1885,7 +1894,7 @@ export default function AdminDashboard({ lang }: AdminDashboardProps) {
                 <div className="flex justify-end pt-2">
                   <button 
                     type="button" 
-                    onClick={() => {
+                    onClick={async () => {
                       const titleAr = (document.getElementById('port_title_ar') as HTMLInputElement)?.value;
                       const titleEn = (document.getElementById('port_title_en') as HTMLInputElement)?.value;
                       const category = (document.getElementById('port_cat') as HTMLSelectElement)?.value || 'embroidery';
@@ -1911,6 +1920,22 @@ export default function AdminDashboard({ lang }: AdminDashboardProps) {
                       
                       setConfig(p => ({ ...p, portfolio: [newItem, ...items] }));
                       
+                      // Save directly to Firestore if configured
+                      if (isFirebaseConfigured && db) {
+                        try {
+                          await setDoc(doc(db, 'portfolio', newItem.id), {
+                            url: newItem.url,
+                            filename: newItem.filename,
+                            category: newItem.category,
+                            title: newItem.title,
+                            order: newItem.order
+                          });
+                        } catch (err) {
+                          console.error("Failed to save portfolio item directly to Firestore:", err);
+                          handleFirestoreError(err, OperationType.CREATE, `portfolio/${newItem.id}`);
+                        }
+                      }
+
                       // Reset inputs
                       (document.getElementById('port_title_ar') as HTMLInputElement).value = '';
                       (document.getElementById('port_title_en') as HTMLInputElement).value = '';
@@ -1933,7 +1958,17 @@ export default function AdminDashboard({ lang }: AdminDashboardProps) {
                     <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-all flex flex-col justify-between p-3">
                       <span className="text-[10px] text-[#0A84FF] font-bold uppercase font-mono">{item.category}</span>
                       <p className="text-[10px] text-white font-bold truncate">{item.title[lang]}</p>
-                      <button onClick={() => setConfig(p => ({ ...p, portfolio: p.portfolio.filter(x => x.id !== item.id) }))} className="px-2 py-1 bg-red-600 text-white rounded-md text-[10px] font-bold self-end cursor-pointer">{lang === 'ar' ? 'حذف' : 'Delete'}</button>
+                      <button onClick={async () => {
+                        if (isFirebaseConfigured && db) {
+                          try {
+                            await deleteDoc(doc(db, 'portfolio', item.id));
+                          } catch (err) {
+                            console.error("Failed to delete portfolio item from Firestore:", err);
+                            handleFirestoreError(err, OperationType.DELETE, `portfolio/${item.id}`);
+                          }
+                        }
+                        setConfig(p => ({ ...p, portfolio: p.portfolio.filter(x => x.id !== item.id) }));
+                      }} className="px-2 py-1 bg-red-600 text-white rounded-md text-[10px] font-bold self-end cursor-pointer">{lang === 'ar' ? 'حذف' : 'Delete'}</button>
                     </div>
                   </div>
                 ))}

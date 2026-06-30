@@ -303,18 +303,28 @@ const loadLocalConfig = () => {
 
 loadLocalConfig();
 
-// Firebase File Upload helper - Completely decoupled from Firebase Storage to keep it in the free tier!
+// Firebase File Upload helper - Saves files to Firebase Storage when configured, or converts to persistent Base64 as a fallback
 export async function uploadFile(file: File, folder: string): Promise<string> {
-  // We do not use Firebase Storage to save costs.
-  // Instead, return the local asset path based on the filename so it reads from the local assets folder.
-  const name = file.name;
-  if (folder === 'portfolio' || folder === 'gallery') {
-    return `/assets/gallery/${name}`;
-  } else if (file.type.startsWith('video') || folder === 'videos') {
-    return `/assets/videos/${name}`;
-  } else {
-    return `/assets/images/${name}`;
+  if (isFirebaseConfigured && storage) {
+    try {
+      const storageRef = ref(storage, `uploads/${folder}/${Date.now()}_${file.name}`);
+      const snapshot = await uploadBytes(storageRef, file);
+      const url = await getDownloadURL(snapshot.ref);
+      return url;
+    } catch (err) {
+      console.error('Failed to upload file to Firebase Storage:', err);
+    }
   }
+
+  // Fallback to Base64 for local/unconfigured/offline mode to ensure it works and persists perfectly!
+  return new Promise<string>((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => {
+      resolve(reader.result as string);
+    };
+    reader.onerror = (error) => reject(error);
+    reader.readAsDataURL(file);
+  });
 }
 
 // Actual Firebase Storage helpers for optional Background Music system
@@ -904,6 +914,7 @@ export const stateStore = {
 
       } catch (error) {
         console.error('Failed to save configuration directly to Firebase:', error);
+        throw error;
       }
     } else {
       // Fallback to LocalStorage if Firebase is not active
