@@ -2,21 +2,18 @@ import { AdminSettings, ServiceItem, Language, BannerSlide, PricingItem, Mainten
 import { SETTINGS } from '../settings';
 import { SERVICES_DATA } from '../translations';
 import contentData from '../../assets/data/content.json';
-import { db, storage, auth, isFirebaseConfigured } from './firebase';
+import { db, isFirebaseConfigured } from './firebase';
+import { callNetlifyAdminApi } from './netlifyClient';
 import { handleFirestoreError, OperationType } from './firebaseStore';
 import { 
   doc, 
   getDoc, 
-  setDoc, 
   collection, 
   getDocs, 
-  deleteDoc, 
-  writeBatch,
   onSnapshot,
   query,
   orderBy
 } from 'firebase/firestore';
-import { ref, uploadBytes, getDownloadURL, deleteObject } from 'firebase/storage';
 
 export interface FAQItem {
   id: string;
@@ -303,54 +300,89 @@ const loadLocalConfig = () => {
 
 loadLocalConfig();
 
-// Firebase File Upload helper - Saves files to Firebase Storage when configured, or converts to persistent Base64 as a fallback
-export async function uploadFile(file: File, folder: string): Promise<string> {
-  if (isFirebaseConfigured && storage) {
-    try {
-      const storageRef = ref(storage, `uploads/${folder}/${Date.now()}_${file.name}`);
-      const snapshot = await uploadBytes(storageRef, file);
-      const url = await getDownloadURL(snapshot.ref);
-      return url;
-    } catch (err) {
-      console.error('Failed to upload file to Firebase Storage:', err);
-    }
-  }
+// Cloudinary Configuration for Direct Client-side Unsigned Uploads
+const CLOUDINARY_CLOUD_NAME = import.meta.env.VITE_CLOUDINARY_CLOUD_NAME || 'dkg7idmsh';
+const CLOUDINARY_UPLOAD_PRESET = import.meta.env.VITE_CLOUDINARY_UPLOAD_PRESET || 'ml_default';
 
-  // Fallback to Base64 for local/unconfigured/offline mode to ensure it works and persists perfectly!
-  return new Promise<string>((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => {
-      resolve(reader.result as string);
-    };
-    reader.onerror = (error) => reject(error);
-    reader.readAsDataURL(file);
-  });
+// Cloudinary File Upload helper - Uploads directly to Cloudinary using unsigned upload preset
+export async function uploadFile(file: File, folder: string): Promise<string> {
+  try {
+    const formData = new FormData();
+    formData.append('file', file);
+    formData.append('upload_preset', CLOUDINARY_UPLOAD_PRESET);
+    
+    // Cloudinary supports 'auto' to auto-detect images, videos, and raw files
+    const url = `https://api.cloudinary.com/v1_1/${CLOUDINARY_CLOUD_NAME}/auto/upload`;
+    
+    console.log(`Uploading file ${file.name} to Cloudinary...`);
+    const response = await fetch(url, {
+      method: 'POST',
+      body: formData
+    });
+
+    if (!response.ok) {
+      const errText = await response.text();
+      throw new Error(`Cloudinary upload failed: ${errText}`);
+    }
+
+    const data = await response.json();
+    if (data.secure_url) {
+      return data.secure_url;
+    }
+    throw new Error('Cloudinary response missing secure_url');
+  } catch (err) {
+    console.error('Failed to upload file to Cloudinary, falling back to local base64:', err);
+    // Fallback to Base64 for local/offline mode to ensure it works and persists perfectly!
+    return new Promise<string>((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => {
+        resolve(reader.result as string);
+      };
+      reader.onerror = (error) => reject(error);
+      reader.readAsDataURL(file);
+    });
+  }
 }
 
-// Actual Firebase Storage helpers for optional Background Music system
+// Cloudinary Upload for background music system
 export async function uploadAudioToStorage(file: File): Promise<string> {
-  if (!isFirebaseConfigured || !storage) {
-    throw new Error('Firebase is not configured');
+  try {
+    const formData = new FormData();
+    formData.append('file', file);
+    formData.append('upload_preset', CLOUDINARY_UPLOAD_PRESET);
+    
+    const url = `https://api.cloudinary.com/v1_1/${CLOUDINARY_CLOUD_NAME}/auto/upload`;
+    
+    console.log(`Uploading audio track ${file.name} to Cloudinary...`);
+    const response = await fetch(url, {
+      method: 'POST',
+      body: formData
+    });
+
+    if (!response.ok) {
+      const errText = await response.text();
+      throw new Error(`Cloudinary audio upload failed: ${errText}`);
+    }
+
+    const data = await response.json();
+    if (data.secure_url) {
+      return data.secure_url;
+    }
+    throw new Error('Cloudinary response missing secure_url');
+  } catch (err) {
+    console.error('Failed to upload audio to Cloudinary:', err);
+    throw err;
   }
-  const storageRef = ref(storage, `music/${Date.now()}_${file.name}`);
-  const snapshot = await uploadBytes(storageRef, file);
-  return await getDownloadURL(snapshot.ref);
 }
 
 export async function deleteAudioFromStorage(url: string): Promise<void> {
-  if (!isFirebaseConfigured || !storage) return;
-  try {
-    const storageRef = ref(storage, url);
-    await deleteObject(storageRef);
-  } catch (err) {
-    console.error('Failed to delete audio from Firebase Storage:', err);
-  }
+  // Cloudinary direct deletion from client-side is disabled for unsigned preset safety.
+  console.log('Skipped deleting Cloudinary asset file:', url);
 }
 
-// Firebase File Delete helper
+// File Delete helper
 export async function deleteFile(url: string): Promise<void> {
-  // No-op for local assets to avoid any Firebase Storage interaction
-  console.log('Skipped deleting local asset file:', url);
+  console.log('Skipped deleting Cloudinary asset file:', url);
 }
 
 // Submit / retrieve maintenance bookings
@@ -366,24 +398,35 @@ export async function upsertCustomer(name: string, phone: string, email: string,
       
       if (existingDoc) {
         const currentData = existingDoc.data();
-        await setDoc(doc(db, 'customers', existingDoc.id), {
-          name: name || currentData.name,
-          email: email || currentData.email,
-          country: country || currentData.country,
-          ordersCount: (currentData.ordersCount || 0) + 1,
-          lastVisit: new Date().toISOString(),
-        }, { merge: true });
+        await callNetlifyAdminApi({
+          action: 'setDoc',
+          collectionName: 'customers',
+          docId: existingDoc.id,
+          data: {
+            name: name || currentData.name,
+            email: email || currentData.email,
+            country: country || currentData.country,
+            ordersCount: (currentData.ordersCount || 0) + 1,
+            lastVisit: new Date().toISOString(),
+          },
+          merge: true
+        });
       } else {
         const newId = doc(collection(db, 'customers')).id;
-        await setDoc(doc(db, 'customers', newId), {
-          name: name || 'Customer',
-          phone: cleanPhone,
-          email: email || '',
-          country: country || 'EG',
-          ordersCount: 1,
-          lastVisit: new Date().toISOString(),
-          createdAt: new Date().toISOString(),
-          blocked: false
+        await callNetlifyAdminApi({
+          action: 'setDoc',
+          collectionName: 'customers',
+          docId: newId,
+          data: {
+            name: name || 'Customer',
+            phone: cleanPhone,
+            email: email || '',
+            country: country || 'EG',
+            ordersCount: 1,
+            lastVisit: new Date().toISOString(),
+            createdAt: new Date().toISOString(),
+            blocked: false
+          }
         });
       }
     } catch (err) {
@@ -444,7 +487,13 @@ export async function saveCustomer(customer: Customer): Promise<void> {
   if (!id) return;
   if (isFirebaseConfigured && db) {
     try {
-      await setDoc(doc(db, 'customers', id), data, { merge: true });
+      await callNetlifyAdminApi({
+        action: 'setDoc',
+        collectionName: 'customers',
+        docId: id,
+        data,
+        merge: true
+      });
     } catch (err) {
       console.error('Failed to save customer in Firestore:', err);
     }
@@ -462,7 +511,11 @@ export async function saveCustomer(customer: Customer): Promise<void> {
 export async function deleteCustomer(id: string): Promise<void> {
   if (isFirebaseConfigured && db) {
     try {
-      await deleteDoc(doc(db, 'customers', id));
+      await callNetlifyAdminApi({
+        action: 'deleteDoc',
+        collectionName: 'customers',
+        docId: id
+      });
     } catch (err) {
       console.error('Failed to delete customer from Firestore:', err);
     }
@@ -505,7 +558,12 @@ export async function addQuickQuote(quote: QuickQuote): Promise<void> {
   if (isFirebaseConfigured && db) {
     try {
       const docRef = doc(collection(db, 'quotes'));
-      await setDoc(docRef, data);
+      await callNetlifyAdminApi({
+        action: 'setDoc',
+        collectionName: 'quotes',
+        docId: docRef.id,
+        data
+      });
       await upsertCustomer(quote.name, quote.phone, '', quote.country);
     } catch (err) {
       console.error('Failed to add quick quote in Firestore:', err);
@@ -525,7 +583,11 @@ export async function addQuickQuote(quote: QuickQuote): Promise<void> {
 export async function deleteQuickQuote(id: string): Promise<void> {
   if (isFirebaseConfigured && db) {
     try {
-      await deleteDoc(doc(db, 'quotes', id));
+      await callNetlifyAdminApi({
+        action: 'deleteDoc',
+        collectionName: 'quotes',
+        docId: id
+      });
     } catch (err) {
       console.error('Failed to delete quick quote from Firestore:', err);
     }
@@ -543,7 +605,13 @@ export async function deleteQuickQuote(id: string): Promise<void> {
 export async function updateQuickQuoteStatus(id: string, status: 'new' | 'review' | 'processing' | 'completed' | 'cancelled'): Promise<void> {
   if (isFirebaseConfigured && db) {
     try {
-      await setDoc(doc(db, 'quotes', id), { status }, { merge: true });
+      await callNetlifyAdminApi({
+        action: 'setDoc',
+        collectionName: 'quotes',
+        docId: id,
+        data: { status },
+        merge: true
+      });
     } catch (err) {
       console.error('Failed to update quick quote status in Firestore:', err);
     }
@@ -578,7 +646,12 @@ export async function fetchSEOConfig(): Promise<SEOConfig> {
       if (docSnap.exists()) {
         return { ...DEFAULT_SEO_CONFIG, ...docSnap.data() } as SEOConfig;
       } else {
-        await setDoc(doc(db, 'seo', 'config'), DEFAULT_SEO_CONFIG);
+        await callNetlifyAdminApi({
+          action: 'setDoc',
+          collectionName: 'seo',
+          docId: 'config',
+          data: DEFAULT_SEO_CONFIG
+        });
         return DEFAULT_SEO_CONFIG;
       }
     } catch (err) {
@@ -599,7 +672,12 @@ export async function fetchSEOConfig(): Promise<SEOConfig> {
 export async function saveSEOConfig(seoConfig: SEOConfig): Promise<void> {
   if (isFirebaseConfigured && db) {
     try {
-      await setDoc(doc(db, 'seo', 'config'), seoConfig);
+      await callNetlifyAdminApi({
+        action: 'setDoc',
+        collectionName: 'seo',
+        docId: 'config',
+        data: seoConfig
+      });
     } catch (err) {
       console.error('Failed to save SEO config in Firestore:', err);
     }
@@ -617,7 +695,12 @@ export async function addMaintenanceBooking(booking: MaintenanceBooking): Promis
   if (isFirebaseConfigured && db) {
     const docRef = doc(collection(db, 'maintenanceBookings'));
     try {
-      await setDoc(docRef, data);
+      await callNetlifyAdminApi({
+        action: 'setDoc',
+        collectionName: 'maintenanceBookings',
+        docId: docRef.id,
+        data
+      });
       await upsertCustomer(booking.name, booking.phone, booking.email, 'EG');
     } catch (err) {
       handleFirestoreError(err, OperationType.CREATE, 'maintenanceBookings/' + docRef.id);
@@ -660,7 +743,11 @@ export async function fetchMaintenanceBookings(): Promise<MaintenanceBooking[]> 
 export async function deleteMaintenanceBooking(id: string): Promise<void> {
   if (isFirebaseConfigured && db) {
     try {
-      await deleteDoc(doc(db, 'maintenanceBookings', id));
+      await callNetlifyAdminApi({
+        action: 'deleteDoc',
+        collectionName: 'maintenanceBookings',
+        docId: id
+      });
     } catch (err) {
       handleFirestoreError(err, OperationType.DELETE, 'maintenanceBookings/' + id);
     }
@@ -679,7 +766,13 @@ export async function deleteMaintenanceBooking(id: string): Promise<void> {
 export async function updateMaintenanceBookingStatus(id: string, status: 'new' | 'processing' | 'completed' | 'closed'): Promise<void> {
   if (isFirebaseConfigured && db) {
     try {
-      await setDoc(doc(db, 'maintenanceBookings', id), { status }, { merge: true });
+      await callNetlifyAdminApi({
+        action: 'setDoc',
+        collectionName: 'maintenanceBookings',
+        docId: id,
+        data: { status },
+        merge: true
+      });
     } catch (err) {
       handleFirestoreError(err, OperationType.UPDATE, 'maintenanceBookings/' + id);
     }
@@ -705,17 +798,9 @@ if (isFirebaseConfigured && db) {
         activeConfig.settings = { ...activeConfig.settings, ...data.settings };
         window.dispatchEvent(new Event('designs4you_config_changed'));
       } else {
-        // DB is empty! Seed with default settings only if signed in
-        if (auth?.currentUser) {
-          try {
-            await setDoc(doc(db, 'config', 'settings'), { settings: DEFAULT_CONFIG.settings });
-          } catch (err) {
-            console.warn('Failed to seed settings doc:', err);
-          }
-        } else {
-          activeConfig.settings = { ...activeConfig.settings, ...DEFAULT_CONFIG.settings };
-          window.dispatchEvent(new Event('designs4you_config_changed'));
-        }
+        // DB is empty! Just use default settings
+        activeConfig.settings = { ...activeConfig.settings, ...DEFAULT_CONFIG.settings };
+        window.dispatchEvent(new Event('designs4you_config_changed'));
       }
     }, (error) => {
       console.warn('Settings subscription error (safely handled):', error);
@@ -735,25 +820,9 @@ if (isFirebaseConfigured && db) {
           (activeConfig as any)[configKey] = items;
           window.dispatchEvent(new Event('designs4you_config_changed'));
         } else {
-          // Collection empty, seed it only if signed in
-          if (auth?.currentUser) {
-            try {
-              console.log(`Seeding empty collection: ${collectionName}`);
-              const batch = writeBatch(db);
-              defaultData.forEach((item) => {
-                const docRef = doc(collection(db, collectionName), item.id);
-                const { id, ...itemData } = item;
-                batch.set(docRef, itemData);
-              });
-              await batch.commit();
-            } catch (err) {
-              console.warn(`Failed to seed collection ${collectionName}:`, err);
-            }
-          } else {
-            // Unauthenticated: just use local defaultData
-            (activeConfig as any)[configKey] = defaultData;
-            window.dispatchEvent(new Event('designs4you_config_changed'));
-          }
+          // Collection empty, just use local defaultData
+          (activeConfig as any)[configKey] = defaultData;
+          window.dispatchEvent(new Event('designs4you_config_changed'));
         }
       }, (error) => {
         console.warn(`Collection subscription error for ${collectionName} (safely handled):`, error);
@@ -807,113 +876,14 @@ export const stateStore = {
     activeConfig = { ...config };
     window.dispatchEvent(new Event('designs4you_config_changed'));
 
-    if (isFirebaseConfigured && db) {
+    if (isFirebaseConfigured) {
       try {
-        // Save Settings
-        await setDoc(doc(db, 'config', 'settings'), { settings: config.settings });
-
-        // Save Services
-        const servicesSnapshot = await getDocs(collection(db, 'services'));
-        const batchS = writeBatch(db);
-        servicesSnapshot.forEach((doc) => batchS.delete(doc.ref));
-        config.services.forEach((item, index) => {
-          const docRef = doc(collection(db, 'services'), item.id);
-          batchS.set(docRef, { ...item, order: index });
+        await callNetlifyAdminApi({
+          action: 'syncConfig',
+          config
         });
-        await batchS.commit();
-
-        // Save Portfolio
-        const portfolioSnapshot = await getDocs(collection(db, 'portfolio'));
-        const batchP = writeBatch(db);
-        portfolioSnapshot.forEach((doc) => batchP.delete(doc.ref));
-        config.portfolio.forEach((item, index) => {
-          const docRef = doc(collection(db, 'portfolio'), item.id);
-          const { id, ...rest } = item;
-          batchP.set(docRef, { ...rest, order: index });
-        });
-        await batchP.commit();
-
-        // Save Videos
-        const videosSnapshot = await getDocs(collection(db, 'videos'));
-        const batchV = writeBatch(db);
-        videosSnapshot.forEach((doc) => batchV.delete(doc.ref));
-        config.videos.forEach((item, index) => {
-          const docRef = doc(collection(db, 'videos'), item.id);
-          const { id, ...rest } = item;
-          batchV.set(docRef, { ...rest, order: index });
-        });
-        await batchV.commit();
-
-        // Save Reviews
-        const reviewsSnapshot = await getDocs(collection(db, 'reviews'));
-        const batchR = writeBatch(db);
-        reviewsSnapshot.forEach((doc) => batchR.delete(doc.ref));
-        config.reviews.forEach((item, index) => {
-          const docRef = doc(collection(db, 'reviews'), item.id);
-          const { id, ...rest } = item;
-          batchR.set(docRef, { ...rest, order: index });
-        });
-        await batchR.commit();
-
-        // Save FAQs
-        const faqsSnapshot = await getDocs(collection(db, 'faqs'));
-        const batchF = writeBatch(db);
-        faqsSnapshot.forEach((doc) => batchF.delete(doc.ref));
-        config.faqs.forEach((item, index) => {
-          const docRef = doc(collection(db, 'faqs'), item.id);
-          const { id, ...rest } = item;
-          batchF.set(docRef, { ...rest, order: index });
-        });
-        await batchF.commit();
-
-        // Save Announcements
-        const annSnapshot = await getDocs(collection(db, 'announcements'));
-        const batchA = writeBatch(db);
-        annSnapshot.forEach((doc) => batchA.delete(doc.ref));
-        config.announcements.forEach((item, index) => {
-          const docRef = doc(collection(db, 'announcements'), item.id);
-          const { id, ...rest } = item;
-          batchA.set(docRef, { ...rest, order: index });
-        });
-        await batchA.commit();
-
-        // Save Banners
-        const bannersSnapshot = await getDocs(collection(db, 'banners'));
-        const batchB = writeBatch(db);
-        bannersSnapshot.forEach((doc) => batchB.delete(doc.ref));
-        config.banners.forEach((item, index) => {
-          const docRef = doc(collection(db, 'banners'), item.id);
-          const { id, ...rest } = item;
-          batchB.set(docRef, { ...rest, order: index });
-        });
-        await batchB.commit();
-
-        // Save Pricing List
-        const pricingSnapshot = await getDocs(collection(db, 'pricingList'));
-        const batchPL = writeBatch(db);
-        pricingSnapshot.forEach((doc) => batchPL.delete(doc.ref));
-        config.pricingList.forEach((item, index) => {
-          const docRef = doc(collection(db, 'pricingList'), item.id);
-          const { id, ...rest } = item;
-          batchPL.set(docRef, { ...rest, order: index });
-        });
-        await batchPL.commit();
-
-        // Save Music Tracks
-        if (config.musicTracks) {
-          const musicSnapshot = await getDocs(collection(db, 'musicTracks'));
-          const batchM = writeBatch(db);
-          musicSnapshot.forEach((doc) => batchM.delete(doc.ref));
-          config.musicTracks.forEach((item, index) => {
-            const docRef = doc(collection(db, 'musicTracks'), item.id);
-            const { id, ...rest } = item;
-            batchM.set(docRef, { ...rest, order: index });
-          });
-          await batchM.commit();
-        }
-
       } catch (error) {
-        console.error('Failed to save configuration directly to Firebase:', error);
+        console.error('Failed to sync configuration via Netlify Function:', error);
         throw error;
       }
     } else {
@@ -930,99 +900,14 @@ export const stateStore = {
     activeConfig = { ...DEFAULT_CONFIG };
     window.dispatchEvent(new Event('designs4you_config_changed'));
 
-    if (isFirebaseConfigured && db) {
+    if (isFirebaseConfigured) {
       try {
-        await setDoc(doc(db, 'config', 'settings'), { settings: DEFAULT_CONFIG.settings });
-        
-        // Reset services
-        const servicesSnapshot = await getDocs(collection(db, 'services'));
-        const batchS = writeBatch(db);
-        servicesSnapshot.forEach((doc) => batchS.delete(doc.ref));
-        DEFAULT_CONFIG.services.forEach((item, index) => {
-          const docRef = doc(collection(db, 'services'), item.id);
-          batchS.set(docRef, { ...item, order: index });
+        await callNetlifyAdminApi({
+          action: 'syncConfig',
+          config: DEFAULT_CONFIG
         });
-        await batchS.commit();
-
-        // Reset portfolio
-        const portfolioSnapshot = await getDocs(collection(db, 'portfolio'));
-        const batchP = writeBatch(db);
-        portfolioSnapshot.forEach((doc) => batchP.delete(doc.ref));
-        DEFAULT_CONFIG.portfolio.forEach((item, index) => {
-          const docRef = doc(collection(db, 'portfolio'), item.id);
-          const { id, ...rest } = item;
-          batchP.set(docRef, { ...rest, order: index });
-        });
-        await batchP.commit();
-
-        // Reset videos
-        const videosSnapshot = await getDocs(collection(db, 'videos'));
-        const batchV = writeBatch(db);
-        videosSnapshot.forEach((doc) => batchV.delete(doc.ref));
-        DEFAULT_CONFIG.videos.forEach((item, index) => {
-          const docRef = doc(collection(db, 'videos'), item.id);
-          const { id, ...rest } = item;
-          batchV.set(docRef, { ...rest, order: index });
-        });
-        await batchV.commit();
-
-        // Reset reviews
-        const reviewsSnapshot = await getDocs(collection(db, 'reviews'));
-        const batchR = writeBatch(db);
-        reviewsSnapshot.forEach((doc) => batchR.delete(doc.ref));
-        DEFAULT_CONFIG.reviews.forEach((item, index) => {
-          const docRef = doc(collection(db, 'reviews'), item.id);
-          const { id, ...rest } = item;
-          batchR.set(docRef, { ...rest, order: index });
-        });
-        await batchR.commit();
-
-        // Reset faqs
-        const faqsSnapshot = await getDocs(collection(db, 'faqs'));
-        const batchF = writeBatch(db);
-        faqsSnapshot.forEach((doc) => batchF.delete(doc.ref));
-        DEFAULT_CONFIG.faqs.forEach((item, index) => {
-          const docRef = doc(collection(db, 'faqs'), item.id);
-          const { id, ...rest } = item;
-          batchF.set(docRef, { ...rest, order: index });
-        });
-        await batchF.commit();
-
-        // Reset announcements
-        const annSnapshot = await getDocs(collection(db, 'announcements'));
-        const batchA = writeBatch(db);
-        annSnapshot.forEach((doc) => batchA.delete(doc.ref));
-        DEFAULT_CONFIG.announcements.forEach((item, index) => {
-          const docRef = doc(collection(db, 'announcements'), item.id);
-          const { id, ...rest } = item;
-          batchA.set(docRef, { ...rest, order: index });
-        });
-        await batchA.commit();
-
-        // Reset banners
-        const bannersSnapshot = await getDocs(collection(db, 'banners'));
-        const batchB = writeBatch(db);
-        bannersSnapshot.forEach((doc) => batchB.delete(doc.ref));
-        DEFAULT_CONFIG.banners.forEach((item, index) => {
-          const docRef = doc(collection(db, 'banners'), item.id);
-          const { id, ...rest } = item;
-          batchB.set(docRef, { ...rest, order: index });
-        });
-        await batchB.commit();
-
-        // Reset pricingList
-        const pricingSnapshot = await getDocs(collection(db, 'pricingList'));
-        const batchPL = writeBatch(db);
-        pricingSnapshot.forEach((doc) => batchPL.delete(doc.ref));
-        DEFAULT_CONFIG.pricingList.forEach((item, index) => {
-          const docRef = doc(collection(db, 'pricingList'), item.id);
-          const { id, ...rest } = item;
-          batchPL.set(docRef, { ...rest, order: index });
-        });
-        await batchPL.commit();
-
       } catch (error) {
-        console.error('Failed to reset config on Firebase:', error);
+        console.error('Failed to reset configuration via Netlify Function:', error);
       }
     } else {
       try {
@@ -1035,11 +920,14 @@ export const stateStore = {
   },
 
   async addPendingReview(review: any): Promise<void> {
-    if (isFirebaseConfigured && db) {
+    if (isFirebaseConfigured) {
       try {
-        const docRef = doc(collection(db, 'reviews'), review.id);
-        const { id, ...rest } = review;
-        await setDoc(docRef, rest);
+        await callNetlifyAdminApi({
+          action: 'setDoc',
+          collectionName: 'reviews',
+          docId: review.id,
+          data: review
+        });
       } catch (err) {
         handleFirestoreError(err, OperationType.CREATE, 'reviews/' + review.id);
       }

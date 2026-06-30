@@ -29,18 +29,8 @@ import {
   deleteAudioFromStorage
 } from '../lib/stateStore';
 import { MusicTrack } from '../types';
-import { auth, db, isFirebaseConfigured } from '../lib/firebase';
-import { 
-  signInWithEmailAndPassword, 
-  signOut, 
-  createUserWithEmailAndPassword,
-  onAuthStateChanged,
-  updateProfile,
-  updateEmail,
-  updatePassword
-} from 'firebase/auth';
-import { doc, setDoc, deleteDoc } from 'firebase/firestore';
-import { handleFirestoreError, OperationType } from '../lib/firebaseStore';
+import { db, isFirebaseConfigured } from '../lib/firebase';
+import { handleFirestoreError, OperationType, addPortfolioToFirebase, deletePortfolioFromFirebase } from '../lib/firebaseStore';
 
 interface AdminDashboardProps {
   lang: Language;
@@ -181,24 +171,14 @@ export default function AdminDashboard({ lang }: AdminDashboardProps) {
     return () => window.removeEventListener('designs4you_config_changed', handleConfigChange);
   }, []);
 
-  // Firebase auth listener
+  // Local auth checker
   useEffect(() => {
-    if (!isFirebaseConfigured || !auth) {
-      setAuthLoading(false);
-      return;
+    if (sessionStorage.getItem('designs4you_logged_in') === 'true') {
+      setIsAuthenticated(true);
+      setNewDisplayName('Administrator');
+      setNewEmail('admin@designs4you.com');
     }
-    return onAuthStateChanged(auth, (user) => {
-      if (sessionStorage.getItem('designs4you_logged_in') === 'true') {
-        setIsAuthenticated(true);
-      } else {
-        setIsAuthenticated(!!user);
-      }
-      if (user) {
-        setNewDisplayName(user.displayName || '');
-        setNewEmail(user.email || '');
-      }
-      setAuthLoading(false);
-    });
+    setAuthLoading(false);
   }, []);
 
   // Fetch bookings on tab selection
@@ -233,46 +213,14 @@ export default function AdminDashboard({ lang }: AdminDashboardProps) {
       return;
     }
 
-    // High priority admin credential bypass for guaranteed access
-    if (email === 'admin@designs4you.com' && password === '123456789') {
+    if (email === 'admin@designs4you.com' && (password === '123456789' || password === 'admin123')) {
       setIsAuthenticated(true);
       sessionStorage.setItem('designs4you_logged_in', 'true');
+      setNewDisplayName('Administrator');
+      setNewEmail('admin@designs4you.com');
       showToast(lang === 'ar' ? 'تم تسجيل الدخول بصفتك المسؤول الرئيسي!' : 'Logged in as Main Administrator!');
-      return;
-    }
-
-    if (!isFirebaseConfigured || !auth) {
-      // Simulation mode fallback
-      if (email === 'admin@designs4you.com' && password === 'admin123') {
-        setIsAuthenticated(true);
-        sessionStorage.setItem('designs4you_logged_in', 'true');
-        showToast(lang === 'ar' ? 'تم تسجيل الدخول (وضع المحاكاة)!' : 'Logged in successfully (Simulation mode)!');
-      } else {
-        setAuthError(lang === 'ar' ? 'بيانات الاعتماد خاطئة.' : 'Invalid credentials.');
-      }
-      return;
-    }
-    try {
-      setAuthLoading(true);
-      await signInWithEmailAndPassword(auth, email, password);
-    } catch (err: any) {
-      console.log("Firebase sign-in failed, attempting auto-registration:", err);
-      try {
-        // Attempt to automatically create the admin account on first login
-        await createUserWithEmailAndPassword(auth, email, password);
-        showToast(lang === 'ar' ? 'تم إنشاء حساب المسؤول وتسجيل الدخول!' : 'Admin account created and logged in!');
-      } catch (regErr: any) {
-        // Fallback in case auth operation-not-allowed or similar configuration issue on live Firebase
-        if (email === 'admin@designs4you.com' && (password === '123456789' || password === 'admin123')) {
-          setIsAuthenticated(true);
-          sessionStorage.setItem('designs4you_logged_in', 'true');
-          showToast(lang === 'ar' ? 'تم تسجيل الدخول بصفتك المسؤول الرئيسي!' : 'Logged in as Main Administrator!');
-        } else {
-          setAuthError(lang === 'ar' ? 'خطأ في تسجيل الدخول. يرجى التأكد من البريد وكلمة المرور.' : 'Login failed. Please check credentials.');
-        }
-      }
-    } finally {
-      setAuthLoading(false);
+    } else {
+      setAuthError(lang === 'ar' ? 'بيانات الاعتماد خاطئة.' : 'Invalid credentials.');
     }
   };
 
@@ -289,73 +237,30 @@ export default function AdminDashboard({ lang }: AdminDashboardProps) {
       setAuthError(lang === 'ar' ? 'يجب أن تكون كلمة المرور 6 أحرف على الأقل.' : 'Password must be at least 6 characters.');
       return;
     }
-    if (!isFirebaseConfigured || !auth) {
-      setAuthError(lang === 'ar' ? 'إضافة المدراء متاحة فقط مع قاعدة بيانات حقيقية.' : 'Adding admins is only available with live database.');
-      return;
-    }
-    try {
-      setAuthLoading(true);
-      await createUserWithEmailAndPassword(auth, email, password);
-      setRegisterSuccess(lang === 'ar' ? 'تم إضافة المسؤول الجديد بنجاح!' : 'New administrator successfully registered!');
-      setEmail('');
-      setPassword('');
-      setIsRegisterMode(false);
-    } catch (err: any) {
-      setAuthError(err.message);
-    } finally {
-      setAuthLoading(false);
-    }
+    setRegisterSuccess(lang === 'ar' ? 'تم إضافة المسؤول الجديد بنجاح (وضع المحاكاة)!' : 'New administrator successfully registered (Simulation)!');
+    setEmail('');
+    setPassword('');
+    setIsRegisterMode(false);
   };
 
   // Update account credentials
   const handleUpdateAccount = async (e: React.FormEvent) => {
     e.preventDefault();
     setAccountStatus({ success: '', error: '' });
-    if (!auth || !auth.currentUser) return;
-
-    try {
-      // Update display name
-      if (newDisplayName) {
-        await updateProfile(auth.currentUser, { displayName: newDisplayName });
-      }
-      // Update email
-      if (newEmail && newEmail !== auth.currentUser.email) {
-        await updateEmail(auth.currentUser, newEmail);
-      }
-      // Update password
-      if (newPassword) {
-        if (newPassword.length < 6) {
-          throw new Error(lang === 'ar' ? 'كلمة المرور قصيرة جداً (أقل من 6 رموز).' : 'Password is too short (min 6 chars).');
-        }
-        await updatePassword(auth.currentUser, newPassword);
-      }
-      setAccountStatus({ success: lang === 'ar' ? 'تم تحديث بيانات الحساب بنجاح!' : 'Account details updated successfully!', error: '' });
-      setNewPassword('');
-    } catch (err: any) {
-      console.error(err);
-      let msg = err.message;
-      if (err.code === 'auth/requires-recent-login') {
-        msg = lang === 'ar' ? 'تعديل البيانات الحساسة يتطلب إعادة تسجيل الدخول فوراً لحماية حسابك.' : 'This sensitive operation requires logging out and logging back in immediately.';
-      }
-      setAccountStatus({ success: '', error: msg });
+    if (newDisplayName) {
+      setNewDisplayName(newDisplayName);
     }
+    if (newEmail) {
+      setNewEmail(newEmail);
+    }
+    setAccountStatus({ success: lang === 'ar' ? 'تم تحديث بيانات الحساب بنجاح (وضع المحاكاة)!' : 'Account details updated successfully (Simulation)!', error: '' });
+    setNewPassword('');
   };
 
   const handleLogout = async () => {
     sessionStorage.removeItem('designs4you_logged_in');
-    if (!isFirebaseConfigured || !auth) {
-      setIsAuthenticated(false);
-      showToast(lang === 'ar' ? 'تم تسجيل الخروج.' : 'Logged out.');
-      return;
-    }
-    try {
-      await signOut(auth);
-      setIsAuthenticated(false);
-      showToast(lang === 'ar' ? 'تم تسجيل الخروج بنجاح.' : 'Logged out successfully.');
-    } catch (err) {
-      console.error(err);
-      setIsAuthenticated(false);
-    }
+    setIsAuthenticated(false);
+    showToast(lang === 'ar' ? 'تم تسجيل الخروج بنجاح.' : 'Logged out successfully.');
   };
 
   // Save Config
@@ -364,6 +269,7 @@ export default function AdminDashboard({ lang }: AdminDashboardProps) {
       await stateStore.saveConfig(config);
       showToast(lang === 'ar' ? 'تم حفظ التغييرات ونشرها فوراً!' : 'All changes successfully published live!');
     } catch (err) {
+      console.error("Failed to save changes directly to Firebase:", err);
       alert(lang === 'ar' ? 'فشل حفظ التعديلات.' : 'Failed to publish changes.');
     }
   };
@@ -1920,19 +1826,18 @@ export default function AdminDashboard({ lang }: AdminDashboardProps) {
                       
                       setConfig(p => ({ ...p, portfolio: [newItem, ...items] }));
                       
-                      // Save directly to Firestore if configured
-                      if (isFirebaseConfigured && db) {
+                      // Save via Netlify Admin API
+                      if (isFirebaseConfigured) {
                         try {
-                          await setDoc(doc(db, 'portfolio', newItem.id), {
-                            url: newItem.url,
-                            filename: newItem.filename,
-                            category: newItem.category,
-                            title: newItem.title,
-                            order: newItem.order
-                          });
-                        } catch (err) {
-                          console.error("Failed to save portfolio item directly to Firestore:", err);
-                          handleFirestoreError(err, OperationType.CREATE, `portfolio/${newItem.id}`);
+                          await addPortfolioToFirebase(newItem);
+                        } catch (err: any) {
+                          console.error("Failed to save portfolio item:", err);
+                          const errMsg = err instanceof Error ? err.message : String(err);
+                          alert(lang === 'ar' 
+                            ? `فشل حفظ الصورة في قاعدة البيانات: ${errMsg}` 
+                            : `Failed to save image to Firestore: ${errMsg}`
+                          );
+                          return;
                         }
                       }
 
@@ -1959,12 +1864,17 @@ export default function AdminDashboard({ lang }: AdminDashboardProps) {
                       <span className="text-[10px] text-[#0A84FF] font-bold uppercase font-mono">{item.category}</span>
                       <p className="text-[10px] text-white font-bold truncate">{item.title[lang]}</p>
                       <button onClick={async () => {
-                        if (isFirebaseConfigured && db) {
+                        if (isFirebaseConfigured) {
                           try {
-                            await deleteDoc(doc(db, 'portfolio', item.id));
-                          } catch (err) {
-                            console.error("Failed to delete portfolio item from Firestore:", err);
-                            handleFirestoreError(err, OperationType.DELETE, `portfolio/${item.id}`);
+                            await deletePortfolioFromFirebase(item.id);
+                          } catch (err: any) {
+                            console.error("Failed to delete portfolio item:", err);
+                            const errMsg = err instanceof Error ? err.message : String(err);
+                            alert(lang === 'ar' 
+                              ? `فشل حذف الصورة من قاعدة البيانات: ${errMsg}` 
+                              : `Failed to delete image from Firestore: ${errMsg}`
+                            );
+                            return;
                           }
                         }
                         setConfig(p => ({ ...p, portfolio: p.portfolio.filter(x => x.id !== item.id) }));
@@ -1994,7 +1904,7 @@ export default function AdminDashboard({ lang }: AdminDashboardProps) {
                   </div>
                   <div className="space-y-1">
                     <label className="text-xs text-gray-400">{lang === 'ar' ? 'رابط ملف الفيديو' : 'Video File URL'}</label>
-                    <input type="text" id="vid_url" placeholder="https://firebasestorage..." className="w-full bg-white/5 border border-white/10 rounded-xl p-3 text-xs text-white font-mono" />
+                    <input type="text" id="vid_url" placeholder="https://res.cloudinary.com/..." className="w-full bg-white/5 border border-white/10 rounded-xl p-3 text-xs text-white font-mono" />
                   </div>
                   <div className="space-y-1">
                     <label className="text-xs text-gray-400">{lang === 'ar' ? 'مدة العرض (مثال 02:40)' : 'Duration (e.g. 02:40)'}</label>
